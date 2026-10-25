@@ -1,0 +1,118 @@
+Esthetician WhatsApp Bot v1:
+	Implementation plan derived from ~/Downloads/SPEC.md (2026-10-25).
+	Tags: @external = outside code (Meta, Google, Fly, lawyer). @test = written test-first. @lead = long lead time, start early. @after(x) = depends on phase x. @est(x) = rough effort.
+	Order: Phase 0 runs in parallel with everything; Phases 1-6 are sequential code work; 7-8 ship it.
+
+Phase 0 - External setup (start day 1):
+	- Buy dedicated SIM for the bot number @external
+	- Register the number in the WhatsApp Business app on a phone she'll keep @external
+		Coexistence requires the number to be active in the Business app before Cloud API onboarding.
+	- Create Meta Business portfolio and start business verification @external @lead
+	- Create Meta app with WhatsApp product @external @after(Business portfolio)
+	- Onboard the number to Cloud API via Embedded Signup (coexistence) @external @lead
+		Confirm messages AND smb_message_echoes webhook fields are available.
+	- Submit template "recordatorio_turno" (utility, es_AR) @external @lead
+		Body vars: name, service, weekday+date, time. Quick-reply buttons: Confirmar / Reprogramar / Cancelar.
+	- Submit template "alerta_admin" (utility, es_AR) @external @lead
+		One body var carrying the full alert text.
+	- Create permanent System User token with whatsapp_business_messaging scope @external
+	- Google Cloud project, enable Calendar API, create service account + JSON key @external
+	- Create calendars "Available" and "Turnos"; share both with the service account (Make changes to events) @external
+	- Create Fly.io app + 1GB volume; create R2/S3 bucket + keys for Litestream @external
+	- Set up uptime monitor account (UptimeRobot / Better Stack) @external
+	- Lawyer consult on Ley 25.326 consent + AAIP registration @external @deferred
+		Decision in spec: launch without consent button, revisit later.
+
+Phase 1 - Project scaffold: @est(0.5d)
+	- Init repo esthetician-bot with uv, Python 3.12, FastAPI, uvicorn, httpx, pyyaml, google-api-python-client, google-auth, pytest, pytest-asyncio, ruff
+	- Module layout
+		app/config.py, app/db.py, app/phones.py, app/slots.py, app/payloads.py, app/events.py, app/reminders.py, app/conversation.py, app/whatsapp.py, app/gcal.py, app/webhook.py, app/jobs.py, app/main.py, services.yaml, schema.sql, tests/
+	- config.py: load env (WA_TOKEN, WA_PHONE_NUMBER_ID, WA_APP_SECRET, WA_VERIFY_TOKEN, ADMIN_PHONES, GOOGLE_SA_JSON, CAL_AVAILABLE_ID, CAL_TURNOS_ID, DB_PATH, ESTHETICIAN_NAME) and fail fast on missing
+	- services.yaml loader with validation (services name+duration, grid_step=15, buffer=0, horizon_regular=14, horizon_vip=30, min_notice_h=2, cancel_cutoff_h=24) @test
+	- schema.sql + db.py (sqlite3, WAL mode, apply schema on startup)
+		clients(phone PK, name, vip, muted_until, awaiting_name, created_at)
+		appointments(event_id PK, phone, start_at)  -- cache only, Calendar wins
+		reminders(event_id PK, send_at, sent_at)
+		processed_messages(wamid PK, received_at)
+		vip_alerts(phone PK, last_alert_at)
+	- ruff + pytest wired into a single `make check`
+
+Phase 2 - Pure core, test-first: @after(1) @est(2d)
+	- phones.normalize_phone -> E.164 @test
+		Cases: 5491122334455, +54 9 11 2233-4455, 011 15 2233-4455, 11 2233 4455, +54 11 2233 4455, invalid input raises.
+	- slots.generate(blocks, busy, services_cfg, service, now, vip) -> list[datetime] @test
+		Cases: fits inside block, crosses block end, overlaps busy, buffer, grid alignment, [VIP] blocks hidden for regulars, horizon 14 vs 30, min notice 2h, DST-free tz, empty result.
+	- slots.days_with_slots + pagination helpers (8 or 9 items + Ver mas) @test
+	- payloads.encode/decode for row and button IDs (<=200 chars, versioned prefix, reject garbage) @test
+		svc, day, slot, more, confirm, mine, cancel, resched, rem:confirm|resched|cancel, vip_noslot, menu, talk.
+	- events.py: build title "Service – Name", parse it, add/strip ✅ prefix idempotently, extract normalized phone from description @test
+	- reminders.compute_send_at(start, created_at) -> None if booked <48h ahead, else start-48h @test
+	- reminders.within_cutoff(start, now) for 24h cancel rule @test
+	- conversation.handle(client_state, incoming, ctx) -> list[Action] (pure, no I/O) @test
+		Incoming kinds: text, list_reply, button_reply, template_button, echo. Actions: SendText, SendList, SendButtons, SendTemplate, AlertAdmin, SetMute, SetName, Book, Cancel, Reschedule, ConfirmEvent.
+		Cases: new number -> notice + ask name; name stored; off-script -> main menu; muted -> no reply; "menu" while muted -> unmute + menu; stale tap -> no disponible + fresh options; inside-cutoff cancel -> contact her + alert; VIP sees No encuentro horario row.
+
+Phase 3 - Thin clients + fakes: @after(2) @est(1d)
+	- whatsapp.WhatsAppClient (httpx async): send_text, send_list, send_buttons, send_template, mark_read
+	- whatsapp.FakeWhatsApp recording sent messages for tests
+	- gcal.CalendarClient: list_events(cal, start, end), get_event, create_event, patch_event, delete_event
+		Run google client calls via asyncio.to_thread. Wrap all failures in CalendarError.
+	- gcal.FakeCalendar in-memory, can be told to fail
+	- Contract test against a real throwaway calendar (manual, opt-in via env flag) @test
+
+Phase 4 - Webhook: @after(3) @est(1d)
+	- GET /webhook verification (hub.mode, hub.verify_token, hub.challenge)
+	- POST /webhook: verify X-Hub-Signature-256 over raw body with WA_APP_SECRET; 401 on mismatch @test
+	- Return 200 immediately; process in background task
+	- Parse payload into Incoming (messages, interactive replies, template button replies, smb_message_echoes); ignore statuses @test
+	- Dedupe by wamid with INSERT OR IGNORE @test
+	- Route: sender in ADMIN_PHONES -> admin handler; echo -> extend mute; else -> conversation
+	- GET /healthz (DB reachable)
+
+Phase 5 - Flows (wire conversation actions to clients): @after(4) @est(3d)
+	- Onboarding: one-line data notice + ask name; store name and phone
+	- Main menu buttons: Reservar / Mi turno / Hablar con [name]
+	- Reservar: service list -> day list -> time list -> confirm buttons
+		Read Available + Turnos for the horizon once per step; VIP gets 30d + [VIP] blocks.
+	- Ver mas paging for days and times; VIP lists use 8 + Ver mas + No encuentro horario
+	- Confirm: global asyncio.Lock -> re-read calendars -> re-check slot + one-active rule -> create event -> cache row -> reminder row -> client confirmation -> admin alert @test
+		Slot gone -> "ese horario ya no está disponible" + fresh slots.
+	- Active appointment lookup: list future Turnos events, match normalized phone in description
+	- Mi turno: show appointment with Reprogramar / Cancelar buttons, or "no tenés turno" + Reservar
+	- Ownership check: any tap referencing an event must match the event description phone @test
+	- Cancel: re-read event, enforce 24h cutoff, delete event, drop reminder, confirm to client, alert her
+	- Reschedule: run Reservar flow in reschedule mode; book new first (one-active check excludes old event), then delete old, alert her
+	- Inside cutoff: tell client to contact her + alert her
+	- Hablar con: alert her via alerta_admin, set muted_until = now+12h
+	- Echo from her to a client: muted_until = max(muted_until, now+12h)
+	- VIP No encuentro horario: alert her with name + service, tell client she'll be in touch; max 1 per VIP per 24h
+	- Admin commands: vip, unvip, vips, bot (unmute); reply with result; unknown -> help text @test
+	- Calendar failure anywhere: tell client to retry later, alert her, never claim success @test
+	- Admin alerts always sent via alerta_admin template (works outside 24h window)
+
+Phase 6 - Background jobs: @after(5) @est(1d)
+	- Start jobs in FastAPI lifespan; cancel cleanly on shutdown
+	- Reminder sender every 1 min: select due unsent rows -> re-read event -> deleted: drop; moved: recompute send_at; else send recordatorio_turno and set sent_at @test
+	- Sync poller every 15 min: list future Turnos events -> upsert appointments cache + reminder rows for events with a parseable phone; drop rows for vanished events @test
+		Covers manual bookings she adds in Calendar.
+	- Reminder buttons: Confirmar -> patch title with ✅ prefix (idempotent); Reprogramar / Cancelar -> same flows as Mi turno incl. cutoff
+	- Never send a reminder for an event booked <48h ahead
+
+Phase 7 - Deploy: @after(6) @est(1d)
+	- Dockerfile (python:3.12-slim, uv sync, litestream binary)
+	- Entry: litestream restore -if-replica-exists, then litestream replicate -exec "uvicorn app.main:app"
+	- fly.toml: 1 machine, min_machines_running=1, auto_stop_machines=off, volume mounted at /data, http check on /healthz
+	- fly secrets set for all env vars + Litestream bucket creds
+	- Configure webhook URL + verify token in Meta app; subscribe to messages and smb_message_echoes
+	- Point uptime monitor at /healthz with alert to the dev
+	- Test a Litestream restore into a fresh volume
+
+Phase 8 - Verification & launch: @after(7) @est(1d)
+	- Run full pytest suite green
+	- Manual E2E with a test phone: onboarding, book, Mi turno, cancel, reschedule, inside-cutoff, Hablar con + echo mute, VIP flow + No encuentro, admin commands
+	- Manual Calendar edits: move an event -> reminder recomputes; delete -> no reminder; add manual event with phone -> appears in Mi turno
+	- Race test: two phones confirm the same slot simultaneously -> exactly one booking
+	- Kill/restart the machine mid-day -> reminders still go out once
+	- Simulate Calendar outage (revoke share) -> client gets retry message, she gets alert
+	- Walk her through the Business app, admin commands, and how to write manual Turnos events (title format + phone in description)
+	- Soft launch with a handful of regular clients for one week, then open to all

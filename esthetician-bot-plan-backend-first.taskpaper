@@ -1,0 +1,148 @@
+Esthetician WhatsApp Bot v1 - Backend First:
+	Variant of esthetician-bot-plan.taskpaper (2026-10-25). Source spec: ~/Downloads/SPEC.md.
+	Goal: build and fully exercise the backend with WhatsApp mocked, no Meta dependency. Real WhatsApp wiring comes last (Track B).
+	Mocking strategy: conversation logic talks to a Messenger port and a Clock port. Implementations: ConsoleMessenger (simulator), FakeMessenger (tests), CloudApiMessenger (Track B).
+	Calendar: FakeCalendar (in-memory, optionally JSON-persisted) by default; CALENDAR_BACKEND=google switches to a real test calendar.
+	Tags: @external = outside code. @test = written test-first. @lead = long lead time. @after(x) = depends on phase x. @est(x) = rough effort. @optional = not blocking.
+
+Track A - Backend with mocked WhatsApp:
+
+	Phase 1 - Project scaffold: @est(0.5d)
+		- Init repo esthetician-bot with uv, Python 3.12, FastAPI, uvicorn, httpx, pyyaml, google-api-python-client, google-auth, pytest, pytest-asyncio, ruff
+		- Module layout
+			app/config.py, app/db.py, app/clock.py, app/phones.py, app/slots.py, app/payloads.py, app/events.py, app/reminders.py, app/conversation.py, app/engine.py, app/jobs.py
+			app/ports.py (Messenger, CalendarPort, Clock protocols)
+			app/adapters/fake_calendar.py, app/adapters/gcal.py, app/adapters/console_messenger.py, app/adapters/fake_messenger.py
+			app/sim.py, services.yaml, dev/seed_calendar.yaml, schema.sql, tests/, tests/scenarios/
+		- config.py: env loading with backend switches (MESSENGER=console|fake|cloud, CALENDAR_BACKEND=fake|google); WhatsApp vars required only when MESSENGER=cloud
+		- services.yaml loader with validation (services name+duration, grid_step=15, buffer=0, horizon_regular=14, horizon_vip=30, min_notice_h=2, cancel_cutoff_h=24) @test
+		- schema.sql + db.py (sqlite3, WAL, apply schema on startup)
+			clients(phone PK, name, vip, muted_until, awaiting_name, created_at)
+			appointments(event_id PK, phone, start_at)  -- cache only, Calendar wins
+			reminders(event_id PK, send_at, sent_at)
+			processed_messages(wamid PK, received_at)
+			vip_alerts(phone PK, last_alert_at)
+		- `make check` = ruff + pytest
+
+	Phase 2 - Pure core, test-first: @after(1) @est(2d)
+		- clock.py: Clock protocol with SystemClock and FakeClock(advance(), set()) @test
+		- phones.normalize_phone -> E.164 @test
+			Cases: 5491122334455, +54 9 11 2233-4455, 011 15 2233-4455, 11 2233 4455, +54 11 2233 4455, invalid input raises.
+		- slots.generate(blocks, busy, services_cfg, service, now, vip) -> list[datetime] @test
+			Cases: fits inside block, crosses block end, overlaps busy, buffer, grid alignment, [VIP] blocks hidden for regulars, horizon 14 vs 30, min notice 2h, empty result.
+		- slots.days_with_slots + pagination helpers (9 + Ver mas regular; 8 + Ver mas + No encuentro horario VIP) @test
+		- payloads.encode/decode for row and button IDs (<=200 chars, versioned prefix, reject garbage) @test
+		- events.py: build/parse "Service – Name", idempotent ✅ prefix, extract normalized phone from description @test
+		- reminders.compute_send_at (None if booked <48h ahead) and within_cutoff (24h) @test
+		- conversation.handle(client_state, incoming, ctx) -> list[Action] (pure, no I/O) @test
+			Incoming: transport-neutral dataclass (wamid, from_phone, kind=text|list_reply|button_reply|template_button|echo, text, payload_id, to_phone, timestamp).
+			Action: SendText, SendList, SendButtons, SendTemplate, AlertAdmin, SetMute, SetName, Book, Cancel, Reschedule, ConfirmEvent.
+
+	Phase 3 - Ports and fakes: @after(2) @est(1d)
+		- ports.Messenger protocol: send_text, send_list(sections, button_label), send_buttons(<=3), send_template(name, vars, buttons)
+			Mirrors Cloud API message shapes and limits (10 rows, 3 buttons, 24-char titles, 20-char button labels) so Track B is a pure adapter.
+		- Shared limit validator used by every Messenger implementation, so the fakes reject what Meta would reject @test
+		- FakeMessenger: records outbound messages per phone; helpers for tests (last_message, tap(row_title)) @test
+		- ConsoleMessenger: pretty-prints text, numbered list rows, numbered buttons, and templates as "[TEMPLATE name] ..." to stdout
+		- CalendarPort protocol: list_events(cal, start, end), get_event, create_event, patch_event, delete_event; failures raise CalendarError
+		- FakeCalendar: in-memory, optional JSON file persistence, fail_next() switch, loads dev/seed_calendar.yaml (Available blocks incl. [VIP]) @test
+		- GoogleCalendar adapter (asyncio.to_thread around google client) @optional
+		- Opt-in contract test running the same suite against FakeCalendar and GoogleCalendar (env flag) @test @optional
+
+	Phase 4 - Engine: @after(3) @est(1d)
+		- engine.handle_incoming(incoming): dedupe by wamid -> route admin / echo / client -> conversation.handle -> execute actions via ports @test
+		- Global asyncio.Lock around booking confirm
+		- Action executor translates Actions into Messenger + CalendarPort + DB calls; CalendarError -> retry-later message + admin alert, never claim success @test
+		- Admin alerts go through send_template("alerta_admin", ...) even in console mode, so template usage is exercised
+		- Dependency wiring in one factory: build_app(config) picks adapters from MESSENGER / CALENDAR_BACKEND
+
+	Phase 5 - Terminal simulator: @after(4) @est(1d)
+		Built early so every flow in Phase 6 can be driven by hand as it lands.
+		- `python -m app.sim --phone +5491100000001` REPL; uses ConsoleMessenger + FakeCalendar + FakeClock + a sim SQLite file
+		- Typing a number taps that list row/button (builds Incoming with the real payload ID); any other text is sent as a text message
+		- Slash commands
+			/phone <num>  switch active client phone
+			/admin  switch to first ADMIN_PHONES number
+			/echo <num> <text>  simulate her replying from the Business app (echo event)
+			/time  show fake now; /time +2d | +3h | 2026-11-02T09:00  move the clock
+			/tick  run due jobs (reminder sender + sync poller) at the current fake time
+			/cal  dump Available + Turnos; /cal add|move|delete ...  simulate her manual Calendar edits
+			/calfail  make the next calendar call fail
+			/db  show clients, reminders, mutes
+			/reset  wipe sim DB + calendar
+		- `--script tests/scenarios/<name>.txt` replays a transcript and diffs the output against an expected file (golden tests) @test
+
+	Phase 6 - Flows: @after(5) @est(3d)
+		Each flow gets unit tests on conversation.handle plus at least one golden scenario.
+		- Onboarding: one-line data notice + ask name; store name and phone @test
+		- Main menu: Reservar / Mi turno / Hablar con [name]; off-script -> main menu @test
+		- Reservar: service -> day -> time -> confirm, with Ver mas paging and VIP horizon/[VIP] blocks @test
+		- Confirm under lock: re-read calendars -> re-check slot + one-active rule -> create event -> cache + reminder row -> confirm to client -> admin alert @test
+			Slot gone -> "ese horario ya no está disponible" + fresh slots.
+		- Active appointment lookup by normalized phone in Turnos descriptions @test
+		- Mi turno with Reprogramar / Cancelar buttons @test
+		- Ownership check on every event-referencing tap @test
+		- Cancel with 24h cutoff; inside cutoff -> contact her + alert @test
+		- Reschedule: book new first (one-active excludes old), then delete old, alert her @test
+		- Hablar con: alert + mute 12h; mute silences menu replies only; "menu" unmutes; echo extends mute @test
+		- VIP No encuentro horario: alert her, client told she'll be in touch, max 1 per VIP per 24h @test
+		- Admin commands: vip, unvip, vips, bot; unknown -> help @test
+		- Stale tap anywhere -> "ese horario ya no está disponible" + fresh options @test
+
+	Phase 7 - Background jobs: @after(6) @est(1d)
+		- jobs.run_reminders(now) and jobs.run_sync(now) as plain async functions (driven by /tick in sim, by FakeClock in tests) @test
+		- Reminder sender: due rows -> re-read event -> deleted: drop; moved: recompute; else send_template("recordatorio_turno") + set sent_at @test
+		- Sync poller: scan future Turnos -> upsert cache + reminder rows for events with a parseable phone; drop vanished @test
+		- Reminder buttons: Confirmar -> ✅ prefix; Reprogramar / Cancelar -> Mi turno flows incl. cutoff @test
+		- Production loop wrappers (every 1 min / 15 min) started from FastAPI lifespan; only enabled outside sim
+		- Restart-safety test: reminder sent exactly once across two engine instances sharing the DB @test
+
+	Phase 8 - Backend verification: @after(7) @est(0.5d)
+		- `make check` green, coverage on slots/conversation/engine/jobs
+		- Golden scenarios cover: onboarding, book, Mi turno, cancel, reschedule, inside-cutoff, Hablar con + echo, VIP + No encuentro, admin, manual calendar move/delete/add, calendar failure, reminders with /time + /tick
+		- Race test: two concurrent confirms on the same slot -> exactly one booking @test
+		- Run a short sim session against a real Google test calendar (CALENDAR_BACKEND=google) @optional
+		- Demo the simulator to the esthetician to validate wording and menu flow before Meta work lands
+
+Track B - WhatsApp integration (after Track A):
+
+	Phase 9 - Cloud API adapter: @after(8) @est(1d)
+		- CloudApiMessenger (httpx async) implementing Messenger; reuses the shared limit validator
+		- Map send_template to approved templates recordatorio_turno and alerta_admin (es_AR)
+		- Run FakeMessenger-based test suite against a recorded-request stub of CloudApiMessenger @test
+
+	Phase 10 - Webhook: @after(9) @est(1d)
+		- GET /webhook verification (hub.mode, hub.verify_token, hub.challenge)
+		- POST /webhook: verify X-Hub-Signature-256 on raw body; 401 on mismatch @test
+		- Return 200 immediately; parse into Incoming in background and call engine.handle_incoming @test
+			Messages, interactive list/button replies, template button replies, smb_message_echoes; ignore statuses.
+		- Fixture payloads captured from Meta docs / real traffic as tests @test
+		- GET /healthz
+
+	Phase 11 - Deploy: @after(10) @est(1d)
+		- Dockerfile (python:3.12-slim, uv sync, litestream)
+		- Entry: litestream restore -if-replica-exists, then litestream replicate -exec "uvicorn app.main:app"
+		- fly.toml: 1 machine, min_machines_running=1, auto_stop_machines=off, volume at /data, http check on /healthz
+		- fly secrets; MESSENGER=cloud, CALENDAR_BACKEND=google
+		- Configure webhook URL in Meta app; subscribe to messages and smb_message_echoes
+		- Uptime monitor on /healthz; test a Litestream restore into a fresh volume
+
+	Phase 12 - Verification & launch: @after(11) @est(1d)
+		- Replay the golden scenarios manually on a real test phone
+		- Restart mid-day -> reminders still sent once
+		- Revoke calendar share -> retry message to client + alert to her
+		- Walk her through the Business app, admin commands, and manual Turnos event format
+		- Soft launch with a handful of regulars for a week, then open to all
+
+External setup (start now, in parallel; nothing in Track A blocks on it):
+	- Buy dedicated SIM; register it in the WhatsApp Business app @external
+	- Meta Business portfolio + business verification @external @lead
+	- Meta app with WhatsApp product; Embedded Signup coexistence onboarding @external @lead @after(Business portfolio)
+	- Submit templates recordatorio_turno and alerta_admin (utility, es_AR) @external @lead
+		Lock the wording from the Phase 8 demo before submitting, or resubmit after.
+	- System User token with whatsapp_business_messaging @external
+	- Google Cloud project, Calendar API, service account + JSON key @external @optional
+		Needed only for the optional real-calendar checks in Track A; required for Track B.
+	- Create "Available" and "Turnos" calendars, share with service account @external
+	- Fly.io app + volume; R2/S3 bucket for Litestream; uptime monitor account @external
+	- Lawyer consult on Ley 25.326 / AAIP @external @deferred
