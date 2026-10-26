@@ -1,0 +1,14 @@
+services:
+  - name: Limpieza facial
+    duration: 60
+  - name: Peeling
+    duration: 45
+  - name: Dermaplaning
+    duration: 60
+
+grid_step: 15
+buffer: 0
+horizon_regular: 14
+horizon_vip: 30
+min_notice_h: 2
+cancel_cutoff_h: 24
