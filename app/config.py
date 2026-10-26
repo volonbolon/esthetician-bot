@@ -13,6 +13,8 @@ _MESSENGERS = ("console", "fake", "cloud")
 _CALENDARS = ("fake", "google")
 _WA_VARS = ("WA_TOKEN", "WA_PHONE_NUMBER_ID", "WA_APP_SECRET", "WA_VERIFY_TOKEN")
 _GCAL_VARS = ("GOOGLE_SA_JSON", "CAL_AVAILABLE_ID", "CAL_TURNOS_ID")
+_REPO_ROOT = Path(__file__).resolve().parent.parent
+_DEFAULT_SERVICES = _REPO_ROOT / "services.yaml"
 
 
 @dataclass(frozen=True)
@@ -101,9 +103,14 @@ def _int_field(data: Mapping[str, Any], key: str, default: int, *, min_val: int)
     return val
 
 
-def load_services(source: str | Path | Mapping[str, Any] = "services.yaml") -> ServicesConfig:
+def load_services(
+    source: str | Path | Mapping[str, Any] = _DEFAULT_SERVICES,
+) -> ServicesConfig:
     if isinstance(source, (str, Path)):
-        raw = yaml.safe_load(Path(source).read_text(encoding="utf-8"))
+        p = Path(source)
+        if not p.is_absolute() and not p.exists():
+            p = _REPO_ROOT / p
+        raw = yaml.safe_load(p.read_text(encoding="utf-8"))
     else:
         raw = source
 
