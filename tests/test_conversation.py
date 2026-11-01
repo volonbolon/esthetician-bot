@@ -495,37 +495,61 @@ def test_cancel_outside_and_inside_cutoff_and_ownership():
         title="Limpieza facial – Ana",
         description=PHONE,
     )
-    # Outside 24h cutoff -> Cancel allowed
-    outside_ctx = _ctx(now="2026-10-26T09:00", turnos=[ev])
-    outside_actions = handle(
-        _client(),
-        Incoming(
-            wamid="w17",
-            from_phone=PHONE,
-            kind="button_reply",
-            payload_id=encode("cancel", evt="evt1"),
-        ),
-        outside_ctx,
-    )
-    assert outside_actions[0] == Cancel(phone=PHONE, event_id="evt1")
-    assert isinstance(outside_actions[1], SendText)
-    assert isinstance(outside_actions[2], AlertAdmin)
+    # Outside 24h cutoff (including exact 24h boundary) -> Cancel allowed
+    for now_str, kind in [
+        ("2026-10-26T09:00", "cancel"),
+        ("2026-10-27T10:00", "rem:cancel"),
+    ]:
+        outside_ctx = _ctx(now=now_str, turnos=[ev])
+        outside_actions = handle(
+            _client(),
+            Incoming(
+                wamid="w17",
+                from_phone=PHONE,
+                kind="button_reply",
+                payload_id=encode(kind, evt="evt1"),
+            ),
+            outside_ctx,
+        )
+        assert outside_actions == [
+            Cancel(phone=PHONE, event_id="evt1"),
+            SendText(
+                to=PHONE,
+                text="Tu turno de Limpieza facial del Mié 28/10 10:00 fue cancelado.",
+            ),
+            AlertAdmin(
+                text=f"Turno cancelado: Limpieza facial – Ana ({PHONE}) del Mié 28/10 10:00."
+            ),
+        ]
 
     # Inside 24h cutoff -> tell client to contact her + AlertAdmin, no Cancel action
-    inside_ctx = _ctx(now="2026-10-27T12:00", turnos=[ev])
-    inside_actions = handle(
-        _client(),
-        Incoming(
-            wamid="w18",
-            from_phone=PHONE,
-            kind="button_reply",
-            payload_id=encode("cancel", evt="evt1"),
-        ),
-        inside_ctx,
-    )
-    assert not any(isinstance(a, Cancel) for a in inside_actions)
-    assert isinstance(inside_actions[0], SendText)
-    assert isinstance(inside_actions[1], AlertAdmin)
+    for kind in ("cancel", "rem:cancel"):
+        inside_ctx = _ctx(now="2026-10-27T12:00", turnos=[ev])
+        inside_actions = handle(
+            _client(),
+            Incoming(
+                wamid="w18",
+                from_phone=PHONE,
+                kind="button_reply",
+                payload_id=encode(kind, evt="evt1"),
+            ),
+            inside_ctx,
+        )
+        assert inside_actions == [
+            SendText(
+                to=PHONE,
+                text=(
+                    "Faltan menos de 24h para tu turno. "
+                    "Por favor hablá directamente con Lorena para cancelar."
+                ),
+            ),
+            AlertAdmin(
+                text=(
+                    f"Ana ({PHONE}) intentó cancelar su turno de Limpieza facial "
+                    "del Mié 28/10 10:00 con menos de 24h."
+                )
+            ),
+        ]
 
     # Ownership mismatch -> rejected as stale tap
     other_client = ClientState(phone=OTHER_PHONE, name="Otra")
@@ -537,7 +561,7 @@ def test_cancel_outside_and_inside_cutoff_and_ownership():
             kind="button_reply",
             payload_id=encode("cancel", evt="evt1"),
         ),
-        outside_ctx,
+        _ctx(now="2026-10-26T09:00", turnos=[ev]),
     )
     assert wrong_owner[0] == SendText(to=OTHER_PHONE, text=STALE_TAP_TEXT)
     assert not any(isinstance(a, Cancel) for a in wrong_owner)

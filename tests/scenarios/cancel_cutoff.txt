@@ -1,0 +1,25 @@
+# Cancel outside 24h cutoff succeeds; inside 24h cutoff -> contact her + alert
+hola
+Ana
+1
+1
+3
+1
+1
+hola
+2
+2
+/cal
+/db
+hola
+1
+1
+2
+1
+1
+/time 2026-10-27T12:00
+hola
+2
+2
+/cal
+/db
