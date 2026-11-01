@@ -17,7 +17,7 @@ class ConsoleMessenger(FakeMessenger):
 
     async def send_text(self, to: str, text: str) -> None:
         await super().send_text(to, text)
-        self._print(f"[BOT -> {to}] {text}")
+        self._print(f"[{to}] {text}")
 
     async def send_list(
         self,
@@ -27,7 +27,7 @@ class ConsoleMessenger(FakeMessenger):
         sections: Sequence[ListSection],
     ) -> None:
         await super().send_list(to, body, button_label, sections)
-        self._print(f"[BOT -> {to}] {body} ({button_label})")
+        self._print(f"[{to}] {body} ({button_label})")
         idx = 1
         for sec in sections:
             if sec.title:
@@ -44,9 +44,9 @@ class ConsoleMessenger(FakeMessenger):
         buttons: Sequence[Button],
     ) -> None:
         await super().send_buttons(to, body, buttons)
-        self._print(f"[BOT -> {to}] {body}")
+        self._print(f"[{to}] {body}")
         for idx, btn in enumerate(buttons, start=1):
-            self._print(f"  [{idx}] {btn.title}")
+            self._print(f"  {idx}. [{btn.title}]")
 
     async def send_template(
         self,
@@ -57,6 +57,6 @@ class ConsoleMessenger(FakeMessenger):
     ) -> None:
         await super().send_template(to, name, params, buttons)
         joined = " | ".join(params)
-        self._print(f"[TEMPLATE {name} -> {to}] {joined}")
+        self._print(f"[TEMPLATE {name}] ({to}) {joined}".rstrip())
         for idx, btn in enumerate(buttons, start=1):
-            self._print(f"  [{idx}] {btn.title}")
+            self._print(f"  {idx}. [{btn.title}]")
