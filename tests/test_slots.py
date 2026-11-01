@@ -1,8 +1,10 @@
-from datetime import datetime
+from datetime import date, datetime
+
+import pytest
 
 from app.clock import TZ
 from app.config import Service, ServicesConfig
-from app.slots import Block, generate
+from app.slots import Block, days_with_slots, generate, paginate, slots_for_day
 
 
 def _cfg(
@@ -119,3 +121,62 @@ def test_empty_result():
     assert generate([], [], cfg, "Facial", now="2026-10-26T09:00") == []
     too_short = [Block("2026-10-27T09:00", "2026-10-27T09:45")]
     assert generate(too_short, [], cfg, "Facial", now="2026-10-26T09:00") == []
+
+
+def test_days_with_slots_and_slots_for_day():
+    slots = [
+        _dt("2026-10-28T10:00"),
+        _dt("2026-10-27T09:00"),
+        _dt("2026-10-27T10:00"),
+    ]
+    assert days_with_slots(slots) == [date(2026, 10, 27), date(2026, 10, 28)]
+    assert slots_for_day(slots, date(2026, 10, 27)) == [
+        _dt("2026-10-27T09:00"),
+        _dt("2026-10-27T10:00"),
+    ]
+    assert slots_for_day(slots, "2026-10-29") == []
+
+
+def test_paginate_regular_9_plus_ver_mas():
+    items = list(range(20))
+    p1 = paginate(items, offset=0, vip=False)
+    assert p1.items == list(range(9))
+    assert p1.has_more is True
+    assert p1.next_offset == 9
+    assert p1.include_no_slot is False
+
+    p2 = paginate(items, offset=9, vip=False)
+    assert p2.items == list(range(9, 18))
+    assert p2.has_more is True
+    assert p2.next_offset == 18
+
+    p3 = paginate(items, offset=18, vip=False)
+    assert p3.items == [18, 19]
+    assert p3.has_more is False
+    assert p3.next_offset is None
+
+
+def test_paginate_vip_8_plus_ver_mas_plus_no_slot():
+    items = list(range(10))
+    p1 = paginate(items, offset=0, vip=True)
+    assert p1.items == list(range(8))
+    assert p1.has_more is True
+    assert p1.next_offset == 8
+    assert p1.include_no_slot is True
+
+    p2 = paginate(items, offset=8, vip=True)
+    assert p2.items == [8, 9]
+    assert p2.has_more is False
+    assert p2.next_offset is None
+    assert p2.include_no_slot is True
+
+    empty_vip = paginate([], offset=0, vip=True)
+    assert empty_vip.items == []
+    assert empty_vip.has_more is False
+    assert empty_vip.include_no_slot is True
+
+
+def test_paginate_negative_offset_raises():
+    with pytest.raises(ValueError):
+        paginate([1, 2, 3], offset=-1)
+

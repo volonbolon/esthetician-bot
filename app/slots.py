@@ -1,6 +1,6 @@
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from typing import Any
 
 from app.clock import _to_tz
@@ -76,3 +76,35 @@ def generate(
             t += step
 
     return sorted(result)
+
+
+@dataclass(frozen=True)
+class Page[T]:
+    items: list[T]
+    next_offset: int | None
+    has_more: bool
+    include_no_slot: bool
+
+
+def days_with_slots(slots: Iterable[datetime | str]) -> list[date]:
+    return sorted({_to_tz(s).date() for s in slots})
+
+
+def slots_for_day(slots: Iterable[datetime | str], day: date | str) -> list[datetime]:
+    target = date.fromisoformat(day) if isinstance(day, str) else day
+    return sorted({_to_tz(s) for s in slots if _to_tz(s).date() == target})
+
+
+def paginate[T](items: Sequence[T], offset: int = 0, *, vip: bool = False) -> Page[T]:
+    if offset < 0:
+        raise ValueError(f"Invalid offset: {offset}")
+    size = 8 if vip else 9
+    sliced = list(items[offset : offset + size])
+    has_more = offset + size < len(items)
+    return Page(
+        items=sliced,
+        next_offset=offset + size if has_more else None,
+        has_more=has_more,
+        include_no_slot=vip,
+    )
+
