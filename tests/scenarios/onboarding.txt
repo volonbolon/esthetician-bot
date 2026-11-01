@@ -1,4 +1,5 @@
 # Onboarding and main menu smoke scenario
 hola
 Ana
+cuanto sale?
 /db

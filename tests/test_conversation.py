@@ -7,6 +7,7 @@ from app.conversation import (
     STALE_TAP_TEXT,
     AlertAdmin,
     Book,
+    Button,
     CalendarEvent,
     Cancel,
     ClientState,
@@ -53,11 +54,12 @@ def _ctx(
     blocks: list[Block] | None = None,
     turnos: list[CalendarEvent] | None = None,
     last_vip_alert_at: str | None = None,
+    esthetician_name: str = "Valeria",
 ) -> ConversationContext:
     return ConversationContext(
         now=now,
         services_cfg=_cfg(),
-        esthetician_name="Valeria",
+        esthetician_name=esthetician_name,
         available_blocks=blocks
         if blocks is not None
         else [Block("2026-10-27T09:00", "2026-10-27T11:00")],
@@ -137,8 +139,27 @@ def test_off_script_message_shows_main_menu():
         Incoming(wamid="w3", from_phone=PHONE, kind="text", text="cuanto sale?"),
         _ctx(),
     )
-    assert len(actions) == 1
-    assert isinstance(actions[0], SendButtons)
+    assert actions == [
+        SendButtons(
+            to=PHONE,
+            body="¿En qué te puedo ayudar?",
+            buttons=(
+                Button(id=encode("svc"), title="Reservar"),
+                Button(id=encode("mine"), title="Mi turno"),
+                Button(id=encode("talk"), title="Hablar con Valeria"),
+            ),
+        )
+    ]
+
+    # Explicit menu button tap and 20-char button label truncation
+    menu_tap = handle(
+        _client(),
+        Incoming(wamid="w3b", from_phone=PHONE, kind="button", payload_id=encode("menu")),
+        _ctx(esthetician_name="María Antonieta"),
+    )
+    assert isinstance(menu_tap[0], SendButtons)
+    assert menu_tap[0].buttons[2].title == "Hablar con María Ant"
+    assert len(menu_tap[0].buttons[2].title) <= 20
 
 
 def test_muted_silences_menu_and_menu_keyword_unmutes():
