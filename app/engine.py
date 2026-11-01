@@ -334,6 +334,7 @@ class Engine:
         try:
             if self._is_confirm_tap(incoming):
                 async with self.booking_lock:
+                    client_state = self._get_client(sender)
                     ctx = await self._build_context(
                         client_state, sender, fetch_calendar=True
                     )

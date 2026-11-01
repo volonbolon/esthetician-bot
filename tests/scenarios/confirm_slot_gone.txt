@@ -1,0 +1,26 @@
+# Confirm under lock: re-read calendars -> re-check slot + one-active rule -> create event -> cache + reminder row -> confirm to client -> admin alert; slot gone -> unavailable + fresh slots
+hola
+Ana
+1
+1
+3
+1
+/phone +5491100000002
+hola
+Bea
+1
+1
+3
+1
+/phone +5491100000001
+1
+1
+1
+1
+1
+1
+1
+/phone +5491100000002
+1
+/db
+/cal

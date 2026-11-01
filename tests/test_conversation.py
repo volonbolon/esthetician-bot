@@ -418,8 +418,13 @@ def test_booking_ver_mas_paging_and_vip_horizon_and_blocks():
 
 
 def test_stale_tap_returns_unavailable_and_fresh_options():
-    ctx = _ctx(blocks=[Block("2026-10-27T09:00", "2026-10-27T10:00")])
-    # Tap a slot at 15:00 that is not available
+    ctx = _ctx(
+        blocks=[
+            Block("2026-10-27T09:00", "2026-10-27T10:00"),
+            Block("2026-10-28T09:00", "2026-10-28T10:00"),
+        ]
+    )
+    # Tap a slot at 15:00 on Oct 27 -> returns STALE_TAP_TEXT + remaining fresh slots on Oct 27
     actions = handle(
         _client(),
         Incoming(
@@ -432,6 +437,45 @@ def test_stale_tap_returns_unavailable_and_fresh_options():
     )
     assert actions[0] == SendText(to=PHONE, text=STALE_TAP_TEXT)
     assert isinstance(actions[1], SendList)
+    assert [r.title for r in actions[1].rows] == ["09:00"]
+
+    # Tap a slot on a day with no slots left -> returns STALE_TAP_TEXT + fresh day list
+    day_gone_actions = handle(
+        _client(),
+        Incoming(
+            wamid="w15b",
+            from_phone=PHONE,
+            kind="button_reply",
+            payload_id=encode("confirm", svc="Limpieza facial", t="2026-10-29T09:00"),
+        ),
+        ctx,
+    )
+    assert day_gone_actions[0] == SendText(to=PHONE, text=STALE_TAP_TEXT)
+    assert isinstance(day_gone_actions[1], SendList)
+    assert [r.title for r in day_gone_actions[1].rows] == ["Mar 27/10", "Mié 28/10"]
+
+    # One-active rule on confirm: client already has an active appointment
+    existing_ev = CalendarEvent(
+        id="evt_existing",
+        start="2026-10-28T09:00",
+        end="2026-10-28T10:00",
+        title="Limpieza facial – Ana",
+        description=PHONE,
+    )
+    one_active_actions = handle(
+        _client(),
+        Incoming(
+            wamid="w15c",
+            from_phone=PHONE,
+            kind="button_reply",
+            payload_id=encode("confirm", svc="Limpieza facial", t="2026-10-27T09:00"),
+        ),
+        _ctx(blocks=[Block("2026-10-27T09:00", "2026-10-27T10:00")], turnos=[existing_ev]),
+    )
+    assert not any(isinstance(a, Book) for a in one_active_actions)
+    assert isinstance(one_active_actions[0], SendText)
+    assert "Ya tenés un turno activo" in one_active_actions[0].text
+    assert isinstance(one_active_actions[1], SendButtons)
 
     # Garbage payload
     garbage_actions = handle(

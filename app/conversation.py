@@ -399,6 +399,28 @@ def _time_list_actions(
     ]
 
 
+def _stale_slot_actions(
+    phone: str,
+    client: ClientState,
+    ctx: ConversationContext,
+    svc_name: str,
+    slot_dt: datetime,
+    *,
+    resched: str | None = None,
+) -> list[Action]:
+    day_str = slot_dt.date().isoformat()
+    all_slots = _compute_slots(ctx, svc_name, vip=client.vip, resched=resched)
+    if slots_for_day(all_slots, day_str):
+        return [
+            SendText(to=phone, text=STALE_TAP_TEXT),
+            *_time_list_actions(phone, client, ctx, svc_name, day_str, resched=resched),
+        ]
+    return [
+        SendText(to=phone, text=STALE_TAP_TEXT),
+        *_day_list_actions(phone, client, ctx, svc_name, resched=resched),
+    ]
+
+
 def _find_event_by_id(ctx: ConversationContext, event_id: str) -> Any | None:
     for ev in ctx.turnos_events:
         if getattr(ev, "id", None) == event_id:
@@ -515,10 +537,7 @@ def _handle_payload(
 
         valid_slots = _compute_slots(ctx, svc_name, vip=client.vip, resched=resched)
         if slot_dt not in valid_slots:
-            return [
-                SendText(to=phone, text=STALE_TAP_TEXT),
-                *_day_list_actions(phone, client, ctx, svc_name, resched=resched),
-            ]
+            return _stale_slot_actions(phone, client, ctx, svc_name, slot_dt, resched=resched)
         return [
             SendButtons(
                 to=phone,
@@ -568,10 +587,7 @@ def _handle_payload(
 
         valid_slots = _compute_slots(ctx, svc_name, vip=client.vip, resched=resched)
         if slot_dt not in valid_slots:
-            return [
-                SendText(to=phone, text=STALE_TAP_TEXT),
-                *_day_list_actions(phone, client, ctx, svc_name, resched=resched),
-            ]
+            return _stale_slot_actions(phone, client, ctx, svc_name, slot_dt, resched=resched)
 
         client_name = client.name or phone
         if resched:
