@@ -1,0 +1,20 @@
+# VIP No encuentro horario: alert her, client told she'll be in touch, max 1 per VIP per 24h
+/admin
+vip +5491100000001
+/phone +5491100000001
+hola
+Ana
+1
+1
+5
+/time +2h
+hola
+1
+2
+1
+10
+/time +23h
+hola
+1
+2
+5

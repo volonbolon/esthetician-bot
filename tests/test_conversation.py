@@ -743,6 +743,20 @@ def test_vip_sees_no_encuentro_horario_row_and_rate_limits_alert():
     assert isinstance(day_actions[0], SendList)
     assert day_actions[0].rows[-1].title == "No encuentro horario"
 
+    # Empty calendar for VIP still offers "No encuentro horario" row
+    empty_day_actions = handle(
+        vip_client,
+        Incoming(
+            wamid="w22_empty",
+            from_phone=PHONE,
+            kind="list_reply",
+            payload_id=encode("svc", svc="Limpieza facial"),
+        ),
+        _ctx(blocks=[]),
+    )
+    assert isinstance(empty_day_actions[0], SendList)
+    assert [r.title for r in empty_day_actions[0].rows] == ["No encuentro horario"]
+
     # Tap No encuentro horario -> AlertAdmin + SendText
     alert_actions = handle(
         vip_client,
@@ -754,11 +768,19 @@ def test_vip_sees_no_encuentro_horario_row_and_rate_limits_alert():
         ),
         ctx,
     )
-    assert any(isinstance(a, AlertAdmin) for a in alert_actions)
-    assert any(isinstance(a, SendText) for a in alert_actions)
+    assert alert_actions == [
+        AlertAdmin(
+            text=f"VIP sin horario: Ana ({PHONE}) busca Limpieza facial.",
+            vip_alert_phone=PHONE,
+        ),
+        SendText(
+            to=PHONE,
+            text="Le avisé a Lorena que buscás turno para Limpieza facial. Te va a escribir pronto!",
+        ),
+    ]
 
     # Within 24h of last VIP alert -> SendText only, no AlertAdmin
-    throttled_ctx = _ctx(now="2026-10-26T09:00", last_vip_alert_at="2026-10-26T01:00")
+    throttled_ctx = _ctx(now="2026-10-26T09:00", last_vip_alert_at="2026-10-25T09:00:01")
     throttled_actions = handle(
         vip_client,
         Incoming(
@@ -769,9 +791,26 @@ def test_vip_sees_no_encuentro_horario_row_and_rate_limits_alert():
         ),
         throttled_ctx,
     )
-    assert not any(isinstance(a, AlertAdmin) for a in throttled_actions)
-    assert len(throttled_actions) == 1
-    assert isinstance(throttled_actions[0], SendText)
+    assert throttled_actions == [
+        SendText(
+            to=PHONE,
+            text="Le avisé a Lorena que buscás turno para Limpieza facial. Te va a escribir pronto!",
+        ),
+    ]
+
+    # Exactly 24h after last VIP alert -> AlertAdmin allowed again
+    unthrottled_ctx = _ctx(now="2026-10-26T09:00", last_vip_alert_at="2026-10-25T09:00:00")
+    unthrottled_actions = handle(
+        vip_client,
+        Incoming(
+            wamid="w25",
+            from_phone=PHONE,
+            kind="list_reply",
+            payload_id=encode("vip_noslot", svc="Limpieza facial"),
+        ),
+        unthrottled_ctx,
+    )
+    assert any(isinstance(a, AlertAdmin) for a in unthrottled_actions)
 
 
 def test_active_appointment_lookup_by_normalized_phone_in_turnos_descriptions():

@@ -1,0 +1,90 @@
+> /admin
+[sim] phone -> +5491100000099 (admin)
+> vip +5491100000001
+[+5491100000099] VIP activado para +5491100000001.
+> /phone +5491100000001
+[sim] phone -> +5491100000001
+> hola
+[+5491100000001] Hola! Guardamos tu número y nombre únicamente para gestionar tus turnos. ¿Cómo es tu nombre?
+> Ana
+[+5491100000001] ¿En qué te puedo ayudar?
+  1. [Reservar]
+  2. [Mi turno]
+  3. [Hablar con Lorena]
+> 1
+[+5491100000001] Elegí un servicio: (Servicios)
+  -- Servicios --
+  1. Limpieza facial — 60 min
+  2. Peeling — 45 min
+  3. Dermaplaning — 60 min
+> 1
+[+5491100000001] Elegí un día para Limpieza facial: (Ver días)
+  -- Días disponibles --
+  1. Sáb 19/12
+  2. Dom 20/12
+  3. Lun 21/12
+  4. Lun 04/01
+  5. No encuentro horario
+> 5
+[TEMPLATE alerta_admin] (+5491100000099) VIP sin horario: Ana (+5491100000001) busca Limpieza facial.
+[+5491100000001] Le avisé a Lorena que buscás turno para Limpieza facial. Te va a escribir pronto!
+> /time +2h
+[sim] time -> 2026-12-18T11:00-03:00
+> hola
+[+5491100000001] ¿En qué te puedo ayudar?
+  1. [Reservar]
+  2. [Mi turno]
+  3. [Hablar con Lorena]
+> 1
+[+5491100000001] Elegí un servicio: (Servicios)
+  -- Servicios --
+  1. Limpieza facial — 60 min
+  2. Peeling — 45 min
+  3. Dermaplaning — 60 min
+> 2
+[+5491100000001] Elegí un día para Peeling: (Ver días)
+  -- Días disponibles --
+  1. Sáb 19/12
+  2. Dom 20/12
+  3. Lun 21/12
+  4. Lun 04/01
+  5. No encuentro horario
+> 1
+[+5491100000001] Elegí un horario para Peeling: (Ver horarios)
+  -- Horarios --
+  1. 09:00
+  2. 09:15
+  3. 09:30
+  4. 09:45
+  5. 10:00
+  6. 10:15
+  7. 10:30
+  8. 10:45
+  9. Ver más
+  10. No encuentro horario
+> 10
+[+5491100000001] Le avisé a Lorena que buscás turno para Peeling. Te va a escribir pronto!
+> /time +23h
+[sim] time -> 2026-12-19T10:00-03:00
+> hola
+[+5491100000001] ¿En qué te puedo ayudar?
+  1. [Reservar]
+  2. [Mi turno]
+  3. [Hablar con Lorena]
+> 1
+[+5491100000001] Elegí un servicio: (Servicios)
+  -- Servicios --
+  1. Limpieza facial — 60 min
+  2. Peeling — 45 min
+  3. Dermaplaning — 60 min
+> 2
+[+5491100000001] Elegí un día para Peeling: (Ver días)
+  -- Días disponibles --
+  1. Sáb 19/12
+  2. Dom 20/12
+  3. Lun 21/12
+  4. Lun 04/01
+  5. No encuentro horario
+> 5
+[TEMPLATE alerta_admin] (+5491100000099) VIP sin horario: Ana (+5491100000001) busca Peeling.
+[+5491100000001] Le avisé a Lorena que buscás turno para Peeling. Te va a escribir pronto!
