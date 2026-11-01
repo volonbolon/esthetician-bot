@@ -4,12 +4,12 @@
 [+5491100000001] ¿En qué te puedo ayudar?
   1. [Reservar]
   2. [Mi turno]
-  3. [Hablar con Valeria]
+  3. [Hablar con Lorena]
 > cuanto sale?
 [+5491100000001] ¿En qué te puedo ayudar?
   1. [Reservar]
   2. [Mi turno]
-  3. [Hablar con Valeria]
+  3. [Hablar con Lorena]
 > /db
 [db:clients] (1)
   +5491100000001: name='Ana' vip=False muted_until=None awaiting_name=False

@@ -54,7 +54,7 @@ def _ctx(
     blocks: list[Block] | None = None,
     turnos: list[CalendarEvent] | None = None,
     last_vip_alert_at: str | None = None,
-    esthetician_name: str = "Valeria",
+    esthetician_name: str = "Lorena",
 ) -> ConversationContext:
     return ConversationContext(
         now=now,
@@ -105,7 +105,7 @@ def test_awaiting_name_stores_name_and_shows_main_menu():
     )
     assert actions[0] == SetName(phone=PHONE, name="Ana Pérez", awaiting_name=False)
     assert isinstance(actions[1], SendButtons)
-    assert [b.title for b in actions[1].buttons] == ["Reservar", "Mi turno", "Hablar con Valeria"]
+    assert [b.title for b in actions[1].buttons] == ["Reservar", "Mi turno", "Hablar con Lorena"]
 
 
 def test_awaiting_name_blank_text_reprompts_and_pre_vip_gets_data_notice():
@@ -146,7 +146,7 @@ def test_off_script_message_shows_main_menu():
             buttons=(
                 Button(id=encode("svc"), title="Reservar"),
                 Button(id=encode("mine"), title="Mi turno"),
-                Button(id=encode("talk"), title="Hablar con Valeria"),
+                Button(id=encode("talk"), title="Hablar con Lorena"),
             ),
         )
     ]
@@ -274,6 +274,147 @@ def test_booking_flow_service_day_time_confirm():
     )
     assert isinstance(confirm_actions[1], SendText)
     assert isinstance(confirm_actions[2], AlertAdmin)
+
+
+def test_booking_ver_mas_paging_and_vip_horizon_and_blocks():
+    # 11 regular days (Oct 27 .. Nov 6), with Oct 27 having 13 slots (09:00..16:00),
+    # plus a [VIP] block on Oct 28 evening and a block on Nov 15 (+20d, VIP horizon only).
+    blocks = [
+        Block("2026-10-27T09:00", "2026-10-27T16:00"),
+        *[
+            Block(f"2026-10-{d:02d}T09:00", f"2026-10-{d:02d}T10:00")
+            for d in range(28, 32)
+        ],
+        *[
+            Block(f"2026-11-{d:02d}T09:00", f"2026-11-{d:02d}T10:00")
+            for d in range(1, 7)
+        ],
+        Block("2026-10-28T18:00", "2026-10-28T20:00", title="[VIP]"),
+        Block("2026-11-15T09:00", "2026-11-15T11:00"),
+    ]
+    ctx = _ctx(now="2026-10-26T09:00", blocks=blocks)
+    reg_client = _client(vip=False)
+    vip_client = _client(vip=True)
+
+    # Regular client: page 1 of days has 9 days + "Ver más" (10 rows total)
+    reg_days_p1 = handle(
+        reg_client,
+        Incoming(
+            wamid="p1",
+            from_phone=PHONE,
+            kind="list_reply",
+            payload_id=encode("svc", svc="Limpieza facial"),
+        ),
+        ctx,
+    )[0]
+    assert isinstance(reg_days_p1, SendList)
+    assert len(reg_days_p1.rows) == 10
+    assert reg_days_p1.rows[-1].title == "Ver más"
+
+    # Tap "Ver más" for days -> remaining 2 regular days (Nov 5, Nov 6); Nov 15 excluded by 14d horizon
+    reg_days_p2 = handle(
+        reg_client,
+        Incoming(
+            wamid="p2",
+            from_phone=PHONE,
+            kind="list_reply",
+            payload_id=reg_days_p1.rows[-1].id,
+        ),
+        ctx,
+    )[0]
+    assert isinstance(reg_days_p2, SendList)
+    assert [r.title for r in reg_days_p2.rows] == ["Jue 05/11", "Vie 06/11"]
+
+    # Regular client on Oct 28 only sees 09:00 (not the [VIP] 18:00..20:00 block)
+    reg_oct28 = handle(
+        reg_client,
+        Incoming(
+            wamid="p3",
+            from_phone=PHONE,
+            kind="list_reply",
+            payload_id=encode("day", svc="Limpieza facial", d="2026-10-28"),
+        ),
+        ctx,
+    )[0]
+    assert isinstance(reg_oct28, SendList)
+    assert [r.title for r in reg_oct28.rows] == ["09:00"]
+
+    # Regular client on Oct 27: 13 slots -> page 1 has 9 slots + "Ver más", page 2 has 4 slots
+    reg_times_p1 = handle(
+        reg_client,
+        Incoming(
+            wamid="p4",
+            from_phone=PHONE,
+            kind="list_reply",
+            payload_id=encode("day", svc="Limpieza facial", d="2026-10-27"),
+        ),
+        ctx,
+    )[0]
+    assert isinstance(reg_times_p1, SendList)
+    assert len(reg_times_p1.rows) == 10
+    assert reg_times_p1.rows[-1].title == "Ver más"
+
+    reg_times_p2 = handle(
+        reg_client,
+        Incoming(
+            wamid="p5",
+            from_phone=PHONE,
+            kind="list_reply",
+            payload_id=reg_times_p1.rows[-1].id,
+        ),
+        ctx,
+    )[0]
+    assert isinstance(reg_times_p2, SendList)
+    assert [r.title for r in reg_times_p2.rows] == ["13:30", "14:00", "14:30", "15:00"]
+
+    # VIP client on Oct 28 sees both regular 09:00 and [VIP] 18:00..19:00 + "No encuentro horario"
+    vip_oct28 = handle(
+        vip_client,
+        Incoming(
+            wamid="p6",
+            from_phone=PHONE,
+            kind="list_reply",
+            payload_id=encode("day", svc="Limpieza facial", d="2026-10-28"),
+        ),
+        ctx,
+    )[0]
+    assert isinstance(vip_oct28, SendList)
+    assert [r.title for r in vip_oct28.rows] == [
+        "09:00",
+        "18:00",
+        "18:30",
+        "19:00",
+        "No encuentro horario",
+    ]
+
+    # VIP client sees Nov 15 (+20d, within 30d VIP horizon) on page 2 of days
+    vip_days_p1 = handle(
+        vip_client,
+        Incoming(
+            wamid="p7",
+            from_phone=PHONE,
+            kind="list_reply",
+            payload_id=encode("svc", svc="Limpieza facial"),
+        ),
+        ctx,
+    )[0]
+    assert isinstance(vip_days_p1, SendList)
+    assert len(vip_days_p1.rows) == 10
+    assert vip_days_p1.rows[-2].title == "Ver más"
+    assert vip_days_p1.rows[-1].title == "No encuentro horario"
+
+    vip_days_p2 = handle(
+        vip_client,
+        Incoming(
+            wamid="p8",
+            from_phone=PHONE,
+            kind="list_reply",
+            payload_id=vip_days_p1.rows[-2].id,
+        ),
+        ctx,
+    )[0]
+    assert isinstance(vip_days_p2, SendList)
+    assert "Dom 15/11" in [r.title for r in vip_days_p2.rows]
 
 
 def test_stale_tap_returns_unavailable_and_fresh_options():

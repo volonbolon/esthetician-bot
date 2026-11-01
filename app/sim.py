@@ -377,7 +377,7 @@ async def run_script(
             messenger="console",
             calendar_backend="fake",
             db_path=":memory:",
-            esthetician_name="Valeria",
+            esthetician_name="Lorena",
             admin_phones=(DEFAULT_ADMIN_PHONE,),
         )
     )

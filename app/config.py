@@ -22,7 +22,7 @@ class Config:
     messenger: MessengerBackend = "console"
     calendar_backend: CalendarBackend = "fake"
     db_path: str = "bot.db"
-    esthetician_name: str = "Esteticista"
+    esthetician_name: str = "Lorena"
     admin_phones: tuple[str, ...] = ()
     wa_token: str = ""
     wa_phone_number_id: str = ""
@@ -84,7 +84,7 @@ def load_config(env: Mapping[str, str] | None = None) -> Config:
         messenger=messenger,  # type: ignore[arg-type]
         calendar_backend=calendar_backend,  # type: ignore[arg-type]
         db_path=e.get("DB_PATH", "bot.db"),
-        esthetician_name=e.get("ESTHETICIAN_NAME", "Esteticista"),
+        esthetician_name=e.get("ESTHETICIAN_NAME", "Lorena"),
         admin_phones=admin_phones,
         wa_token=e.get("WA_TOKEN", ""),
         wa_phone_number_id=e.get("WA_PHONE_NUMBER_ID", ""),

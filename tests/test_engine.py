@@ -32,7 +32,7 @@ def _make_engine() -> tuple[Engine, FakeMessenger, FakeCalendar, FakeClock]:
         messenger="fake",
         calendar_backend="fake",
         db_path=":memory:",
-        esthetician_name="Valeria",
+        esthetician_name="Lorena",
         admin_phones=(ADMIN,),
     )
     messenger = FakeMessenger()
@@ -327,7 +327,7 @@ async def test_admin_alerts_use_alerta_admin_template_in_console_mode():
         messenger="console",
         calendar_backend="fake",
         db_path=":memory:",
-        esthetician_name="Valeria",
+        esthetician_name="Lorena",
         admin_phones=(ADMIN,),
     )
     engine = build_app(

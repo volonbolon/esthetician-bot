@@ -71,7 +71,7 @@ class CalendarEvent:
 class ConversationContext:
     now: datetime
     services_cfg: ServicesConfig
-    esthetician_name: str = "Esteticista"
+    esthetician_name: str = "Lorena"
     available_blocks: Sequence[Any] = ()
     turnos_events: Sequence[Any] = ()
     last_vip_alert_at: datetime | None = None
@@ -80,7 +80,7 @@ class ConversationContext:
         self,
         now: datetime | str,
         services_cfg: ServicesConfig,
-        esthetician_name: str = "Esteticista",
+        esthetician_name: str = "Lorena",
         available_blocks: Sequence[Any] = (),
         turnos_events: Sequence[Any] = (),
         last_vip_alert_at: datetime | str | None = None,

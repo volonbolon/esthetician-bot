@@ -1,0 +1,20 @@
+# Booking flow: service -> day -> Ver mas -> time -> confirm, plus VIP horizon and [VIP] blocks
+/cal add available 2026-11-15T10:00 2026-11-15T12:00 Disponible
+hola
+Ana
+1
+1
+1
+10
+1
+1
+/admin
+vip +5491100000002
+/phone +5491100000002
+hola
+Carla
+1
+1
+1
+9
+/cal
