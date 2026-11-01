@@ -35,6 +35,7 @@ class FakeMessenger:
     def __init__(self) -> None:
         self.sent: list[OutboundMessage] = []
         self.by_phone: dict[str, list[OutboundMessage]] = defaultdict(list)
+        self.messages = self.by_phone
         self._seq = 0
 
     def _record(self, msg: OutboundMessage) -> None:
@@ -113,8 +114,8 @@ class FakeMessenger:
     def tap(
         self,
         target: str | int,
-        *,
         phone: str | None = None,
+        *,
         wamid: str | None = None,
     ) -> Incoming:
         pool = self.by_phone.get(normalize_phone(phone), []) if phone else self.sent
