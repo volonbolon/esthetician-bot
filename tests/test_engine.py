@@ -8,7 +8,7 @@ from app.clock import FakeClock
 from app.config import Config
 from app.conversation import Incoming
 from app.db import init_db
-from app.engine import RETRY_LATER_TEXT, Engine, build_app
+from app.engine import BOOKING_LOCK, RETRY_LATER_TEXT, Engine, build_app
 from app.payloads import encode
 
 CLIENT_A = "+5491122334455"
@@ -126,6 +126,7 @@ async def test_calendar_error_tells_client_to_retry_and_alerts_admin_without_cla
 @pytest.mark.asyncio
 async def test_concurrent_confirm_race_allows_only_one_booking():
     engine, messenger, calendar, _ = _make_engine()
+    assert engine.booking_lock is BOOKING_LOCK
     await calendar.create_event(
         "available", "2026-10-29T09:00", "2026-10-29T10:00", "Disponible"
     )
@@ -134,6 +135,14 @@ async def test_concurrent_confirm_race_allows_only_one_booking():
     for idx, (phone, name) in enumerate([(CLIENT_A, "Ana"), (CLIENT_B, "Bea")], start=1):
         await engine.handle_incoming(Incoming(wamid=f"init_{idx}a", from_phone=phone, text="hi"))
         await engine.handle_incoming(Incoming(wamid=f"init_{idx}b", from_phone=phone, text=name))
+
+    orig_list_events = calendar.list_events
+
+    async def yielding_list_events(cal_id, start, end):
+        await asyncio.sleep(0)
+        return await orig_list_events(cal_id, start, end)
+
+    calendar.list_events = yielding_list_events  # type: ignore[method-assign]
 
     confirm_payload = encode("confirm", svc="Limpieza facial", t="2026-10-29T09:00")
     await asyncio.gather(
@@ -155,7 +164,7 @@ async def test_concurrent_confirm_race_allows_only_one_booking():
         ),
     )
 
-    turnos = await calendar.list_events("turnos", "2026-10-29T00:00", "2026-10-30T00:00")
+    turnos = await orig_list_events("turnos", "2026-10-29T00:00", "2026-10-30T00:00")
     assert len(turnos) == 1
     texts = [
         m.text

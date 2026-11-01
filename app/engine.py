@@ -37,6 +37,7 @@ RETRY_LATER_TEXT = (
     "Hubo un problema con la agenda. Por favor intentá de nuevo en unos minutos."
 )
 ADMIN_HELP_TEXT = "Comandos disponibles: vip <tel>, unvip <tel>, vips, bot <tel>"
+BOOKING_LOCK = asyncio.Lock()
 
 
 class Engine:
@@ -57,7 +58,7 @@ class Engine:
         self.messenger = messenger
         self.calendar = calendar
         self.clock: Clock = clock if clock is not None else SystemClock()
-        self.booking_lock = booking_lock if booking_lock is not None else asyncio.Lock()
+        self.booking_lock = booking_lock if booking_lock is not None else BOOKING_LOCK
         self._admin_phones = frozenset(
             normalize_phone(p) for p in config.admin_phones if p.strip()
         )
@@ -170,7 +171,7 @@ class Engine:
         if incoming.kind not in ("list_reply", "button_reply", "template_button"):
             return False
         try:
-            return decode(incoming.payload_id).kind == "confirm"
+            return decode(incoming.payload_id).kind in ("confirm", "resched_confirm")
         except ValueError:
             return False
 
