@@ -20,7 +20,7 @@ class SystemClock:
 
 
 class FakeClock:
-    def __init__(self, initial: datetime | str = "2026-10-26T09:00:00") -> None:
+    def __init__(self, initial: datetime | str = "2026-12-18T09:00:00") -> None:
         self._now = _to_tz(initial)
 
     def now(self) -> datetime:

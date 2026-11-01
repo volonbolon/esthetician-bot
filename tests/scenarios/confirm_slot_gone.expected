@@ -14,9 +14,9 @@
 > 1
 [+5491100000001] Elegí un día para Limpieza facial: (Ver días)
   -- Días disponibles --
-  1. Mar 27/10
-  2. Mié 28/10
-  3. Jue 29/10
+  1. Sáb 19/12
+  2. Dom 20/12
+  3. Lun 21/12
 > 3
 [+5491100000001] Elegí un horario para Limpieza facial: (Ver horarios)
   -- Horarios --
@@ -31,7 +31,7 @@
   9. 12:00
   10. Ver más
 > 1
-[+5491100000001] ¿Confirmás Limpieza facial el Jue 29/10 10:00?
+[+5491100000001] ¿Confirmás Limpieza facial el Lun 21/12 10:00?
   1. [Confirmar]
   2. [Cancelar]
 > /phone +5491100000002
@@ -52,9 +52,9 @@
 > 1
 [+5491100000002] Elegí un día para Limpieza facial: (Ver días)
   -- Días disponibles --
-  1. Mar 27/10
-  2. Mié 28/10
-  3. Jue 29/10
+  1. Sáb 19/12
+  2. Dom 20/12
+  3. Lun 21/12
 > 3
 [+5491100000002] Elegí un horario para Limpieza facial: (Ver horarios)
   -- Horarios --
@@ -69,14 +69,14 @@
   9. 12:00
   10. Ver más
 > 1
-[+5491100000002] ¿Confirmás Limpieza facial el Jue 29/10 10:00?
+[+5491100000002] ¿Confirmás Limpieza facial el Lun 21/12 10:00?
   1. [Confirmar]
   2. [Cancelar]
 > /phone +5491100000001
 [sim] phone -> +5491100000001
 > 1
-[+5491100000001] Listo! Reservamos tu turno de Limpieza facial para el Jue 29/10 10:00.
-[TEMPLATE alerta_admin] (+5491100000099) Nuevo turno: Limpieza facial – Ana (+5491100000001) el Jue 29/10 10:00.
+[+5491100000001] Listo! Reservamos tu turno de Limpieza facial para el Lun 21/12 10:00.
+[TEMPLATE alerta_admin] (+5491100000099) Nuevo turno: Limpieza facial – Ana (+5491100000001) el Lun 21/12 10:00.
 > 1
 [+5491100000001] ¿En qué te puedo ayudar?
   1. [Reservar]
@@ -91,9 +91,9 @@
 > 1
 [+5491100000001] Elegí un día para Limpieza facial: (Ver días)
   -- Días disponibles --
-  1. Mar 27/10
-  2. Mié 28/10
-  3. Jue 29/10
+  1. Sáb 19/12
+  2. Dom 20/12
+  3. Lun 21/12
 > 1
 [+5491100000001] Elegí un horario para Limpieza facial: (Ver horarios)
   -- Horarios --
@@ -108,11 +108,11 @@
   9. 11:00
   10. Ver más
 > 1
-[+5491100000001] ¿Confirmás Limpieza facial el Mar 27/10 09:00?
+[+5491100000001] ¿Confirmás Limpieza facial el Sáb 19/12 09:00?
   1. [Confirmar]
   2. [Cancelar]
 > 1
-[+5491100000001] Ya tenés un turno activo el Jue 29/10 10:00.
+[+5491100000001] Ya tenés un turno activo el Lun 21/12 10:00.
 [+5491100000001] ¿En qué te puedo ayudar?
   1. [Reservar]
   2. [Mi turno]
@@ -137,14 +137,14 @@
   +5491100000001: name='Ana' vip=False muted_until=None awaiting_name=False
   +5491100000002: name='Bea' vip=False muted_until=None awaiting_name=False
 [db:reminders] (1)
-  evt_1: send_at=2026-10-27T10:00:00-03:00 sent_at=None
+  evt_1: send_at=2026-12-19T10:00:00-03:00 sent_at=None
 [db:mutes] (0)
 > /cal
 [cal:available] (5)
-  avail_1: 2026-10-27T09:00-03:00 -> 2026-10-27T13:00-03:00 | Disponible
-  avail_2: 2026-10-27T15:00-03:00 -> 2026-10-27T18:00-03:00 | Disponible [VIP]
-  avail_3: 2026-10-28T09:00-03:00 -> 2026-10-28T13:00-03:00 | Disponible
-  avail_4: 2026-10-29T10:00-03:00 -> 2026-10-29T14:00-03:00 | Disponible
-  avail_5: 2026-11-12T10:00-03:00 -> 2026-11-12T13:00-03:00 | Disponible [VIP]
+  avail_1: 2026-12-19T09:00-03:00 -> 2026-12-19T13:00-03:00 | Disponible
+  avail_2: 2026-12-19T15:00-03:00 -> 2026-12-19T18:00-03:00 | Disponible [VIP]
+  avail_3: 2026-12-20T09:00-03:00 -> 2026-12-20T13:00-03:00 | Disponible
+  avail_4: 2026-12-21T10:00-03:00 -> 2026-12-21T14:00-03:00 | Disponible
+  avail_5: 2027-01-04T10:00-03:00 -> 2027-01-04T13:00-03:00 | Disponible [VIP]
 [cal:turnos] (1)
-  evt_1: 2026-10-29T10:00-03:00 -> 2026-10-29T11:00-03:00 | Limpieza facial – Ana | +5491100000001
+  evt_1: 2026-12-21T10:00-03:00 -> 2026-12-21T11:00-03:00 | Limpieza facial – Ana | +5491100000001

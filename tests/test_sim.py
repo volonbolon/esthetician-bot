@@ -109,22 +109,22 @@ async def test_simulator_numeric_taps_and_slash_commands(tmp_path: Path):
 
     # /time (+2d, +3h, explicit ISO) and /tick
     await sim.handle_line("/time +2d")
-    assert "2026-10-28T09:00" in buf.getvalue()
+    assert "2026-12-20T09:00" in buf.getvalue()
     await sim.handle_line("/time +3h")
-    assert "2026-10-28T12:00" in buf.getvalue()
-    await sim.handle_line("/time 2026-11-02T09:00")
+    assert "2026-12-20T12:00" in buf.getvalue()
+    await sim.handle_line("/time 2026-12-25T09:00")
     await sim.handle_line("/time")
-    assert "2026-11-02T09:00" in buf.getvalue()
+    assert "2026-12-25T09:00" in buf.getvalue()
     await sim.handle_line("/tick")
     assert "[sim] tick @" in buf.getvalue()
 
     # /cal add, move, delete
     await sim.handle_line(
-        "/cal add turnos 2026-11-05T10:00 2026-11-05T11:00 Limpieza facial – Ana | +5491100000001"
+        "/cal add turnos 2026-12-28T10:00 2026-12-28T11:00 Limpieza facial – Ana | +5491100000001"
     )
     assert "[cal] added evt_2" in buf.getvalue()
-    await sim.handle_line("/cal move evt_2 2026-11-05T12:00")
-    assert "[cal] moved evt_2: 2026-11-05T12:00-03:00 -> 2026-11-05T13:00-03:00" in buf.getvalue()
+    await sim.handle_line("/cal move evt_2 2026-12-28T12:00")
+    assert "[cal] moved evt_2: 2026-12-28T12:00-03:00 -> 2026-12-28T13:00-03:00" in buf.getvalue()
     await sim.handle_line("/cal delete evt_2")
     assert "[cal] deleted evt_2" in buf.getvalue()
 

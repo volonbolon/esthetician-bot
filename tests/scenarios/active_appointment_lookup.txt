@@ -1,5 +1,5 @@
 # Active appointment lookup by normalized phone in Turnos descriptions (including manual entries)
-/cal add turnos 2026-10-28T11:00 2026-10-28T11:45 Peeling – Ana | Anotado manual: 011 15 0000-0001
+/cal add turnos 2026-12-20T11:00 2026-12-20T11:45 Peeling – Ana | Anotado manual: 011 15 0000-0001
 hola
 Ana
 2

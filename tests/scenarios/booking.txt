@@ -1,5 +1,5 @@
 # Booking flow: service -> day -> Ver mas -> time -> confirm, plus VIP horizon and [VIP] blocks
-/cal add available 2026-11-15T10:00 2026-11-15T12:00 Disponible
+/cal add available 2027-01-07T10:00 2027-01-07T12:00 Disponible
 hola
 Ana
 1

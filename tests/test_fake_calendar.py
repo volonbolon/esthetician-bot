@@ -11,14 +11,14 @@ async def test_fake_calendar_crud_and_seed():
     cal = FakeCalendar(seed_path=DEFAULT_SEED_PATH)
     assert isinstance(cal, CalendarPort)
 
-    avail = await cal.list_events("available", "2026-10-26T00:00", "2026-12-01T00:00")
+    avail = await cal.list_events("available", "2026-12-18T00:00", "2027-02-01T00:00")
     assert len(avail) >= 4
     assert any("[VIP]" in e.title for e in avail)
 
     ev = await cal.create_event(
         "turnos",
-        "2026-10-27T09:00",
-        "2026-10-27T10:00",
+        "2026-12-19T09:00",
+        "2026-12-19T10:00",
         "Limpieza facial – Ana",
         "+5491122334455",
     )

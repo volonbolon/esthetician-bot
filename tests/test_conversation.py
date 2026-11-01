@@ -164,16 +164,46 @@ def test_off_script_message_shows_main_menu():
 
 def test_muted_silences_menu_and_menu_keyword_unmutes():
     muted = _client(muted_until="2026-10-26T21:00")
-    assert handle(
-        muted,
-        Incoming(wamid="w4", from_phone=PHONE, kind="text", text="hola"),
-        _ctx(),
-    ) == []
+    ctx = _ctx(now="2026-10-26T09:00")
 
+    # Free-text messages while muted are silenced (no main menu reply)
+    assert (
+        handle(
+            muted,
+            Incoming(wamid="w4", from_phone=PHONE, kind="text", text="hola Lorena, tenés lugar?"),
+            ctx,
+        )
+        == []
+    )
+
+    # Booking confirmation tap still goes through while muted
+    confirm_while_muted = handle(
+        muted,
+        Incoming(
+            wamid="w4_book",
+            from_phone=PHONE,
+            kind="button_reply",
+            payload_id=encode("confirm", svc="Limpieza facial", t="2026-10-27T09:00"),
+        ),
+        ctx,
+    )
+    assert isinstance(confirm_while_muted[0], Book)
+    assert isinstance(confirm_while_muted[1], SendText)
+
+    # After 12h mute expires, text messages return main menu again
+    expired_actions = handle(
+        muted,
+        Incoming(wamid="w4_exp", from_phone=PHONE, kind="text", text="hola"),
+        _ctx(now="2026-10-26T21:00"),
+    )
+    assert len(expired_actions) == 1
+    assert isinstance(expired_actions[0], SendButtons)
+
+    # Typing "menu" (case-insensitive) unmutes early and returns main menu
     unmute_actions = handle(
         muted,
-        Incoming(wamid="w5", from_phone=PHONE, kind="text", text="MENU"),
-        _ctx(),
+        Incoming(wamid="w5", from_phone=PHONE, kind="text", text="  MENU "),
+        ctx,
     )
     assert unmute_actions[0] == SetMute(phone=PHONE, muted_until=None)
     assert isinstance(unmute_actions[1], SendButtons)
@@ -183,10 +213,31 @@ def test_echo_extends_mute_and_never_replies():
     state = _client()
     actions = handle(
         state,
-        Incoming(wamid="w_echo", from_phone="+5491100000000", to_phone=PHONE, kind="echo", text="Hola Ana"),
+        Incoming(
+            wamid="w_echo",
+            from_phone="+5491100000000",
+            to_phone=PHONE,
+            kind="echo",
+            text="Hola Ana",
+        ),
         _ctx(now="2026-10-26T09:00"),
     )
     assert actions == [SetMute(phone=PHONE, muted_until=_dt("2026-10-26T21:00"))]
+
+    # Subsequent echo at 12:00 extends mute to 2026-10-27T00:00
+    already_muted = _client(muted_until="2026-10-26T21:00")
+    extended = handle(
+        already_muted,
+        Incoming(
+            wamid="w_echo2",
+            from_phone="+5491100000000",
+            to_phone=PHONE,
+            kind="echo",
+            text="Te espero!",
+        ),
+        _ctx(now="2026-10-26T12:00"),
+    )
+    assert extended == [SetMute(phone=PHONE, muted_until=_dt("2026-10-27T00:00"))]
 
 
 def test_talk_sets_mute_and_alerts_admin():
@@ -195,9 +246,14 @@ def test_talk_sets_mute_and_alerts_admin():
         Incoming(wamid="w6", from_phone=PHONE, kind="button_reply", payload_id=encode("talk")),
         _ctx(now="2026-10-26T09:00"),
     )
-    assert actions[0] == SetMute(phone=PHONE, muted_until=_dt("2026-10-26T21:00"))
-    assert isinstance(actions[1], AlertAdmin)
-    assert isinstance(actions[2], SendText)
+    assert actions == [
+        SetMute(phone=PHONE, muted_until=_dt("2026-10-26T21:00")),
+        AlertAdmin(text=f"Ana ({PHONE}) quiere hablar con vos."),
+        SendText(
+            to=PHONE,
+            text="Le avisé a Lorena. Te va a responder por acá en breve.",
+        ),
+    ]
 
 
 def test_booking_flow_service_day_time_confirm():

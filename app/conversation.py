@@ -789,14 +789,13 @@ def handle(
     is_muted = (
         client_state.muted_until is not None and _to_tz(client_state.muted_until) > ctx.now
     )
-    if is_muted:
-        if incoming.kind == "text" and incoming.text.strip().lower() == "menu":
+    if is_muted and incoming.kind == "text":
+        if incoming.text.strip().lower() == "menu":
             return [
                 SetMute(phone=phone, muted_until=None),
                 _main_menu(phone, ctx),
             ]
-        if incoming.kind != "template_button":
-            return []
+        return []
 
     if incoming.kind in ("list_reply", "button_reply", "template_button"):
         try:

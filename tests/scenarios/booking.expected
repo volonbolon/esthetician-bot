@@ -1,5 +1,5 @@
-> /cal add available 2026-11-15T10:00 2026-11-15T12:00 Disponible
-[cal] added evt_1 in available: 2026-11-15T10:00-03:00 -> 2026-11-15T12:00-03:00 Disponible
+> /cal add available 2027-01-07T10:00 2027-01-07T12:00 Disponible
+[cal] added evt_1 in available: 2027-01-07T10:00-03:00 -> 2027-01-07T12:00-03:00 Disponible
 > hola
 [+5491100000001] Hola! Guardamos tu número y nombre únicamente para gestionar tus turnos. ¿Cómo es tu nombre?
 > Ana
@@ -16,9 +16,9 @@
 > 1
 [+5491100000001] Elegí un día para Limpieza facial: (Ver días)
   -- Días disponibles --
-  1. Mar 27/10
-  2. Mié 28/10
-  3. Jue 29/10
+  1. Sáb 19/12
+  2. Dom 20/12
+  3. Lun 21/12
 > 1
 [+5491100000001] Elegí un horario para Limpieza facial: (Ver horarios)
   -- Horarios --
@@ -40,12 +40,12 @@
   3. 11:45
   4. 12:00
 > 1
-[+5491100000001] ¿Confirmás Limpieza facial el Mar 27/10 11:15?
+[+5491100000001] ¿Confirmás Limpieza facial el Sáb 19/12 11:15?
   1. [Confirmar]
   2. [Cancelar]
 > 1
-[+5491100000001] Listo! Reservamos tu turno de Limpieza facial para el Mar 27/10 11:15.
-[TEMPLATE alerta_admin] (+5491100000099) Nuevo turno: Limpieza facial – Ana (+5491100000001) el Mar 27/10 11:15.
+[+5491100000001] Listo! Reservamos tu turno de Limpieza facial para el Sáb 19/12 11:15.
+[TEMPLATE alerta_admin] (+5491100000099) Nuevo turno: Limpieza facial – Ana (+5491100000001) el Sáb 19/12 11:15.
 > /admin
 [sim] phone -> +5491100000099 (admin)
 > vip +5491100000002
@@ -68,11 +68,11 @@
 > 1
 [+5491100000002] Elegí un día para Limpieza facial: (Ver días)
   -- Días disponibles --
-  1. Mar 27/10
-  2. Mié 28/10
-  3. Jue 29/10
-  4. Jue 12/11
-  5. Dom 15/11
+  1. Sáb 19/12
+  2. Dom 20/12
+  3. Lun 21/12
+  4. Lun 04/01
+  5. Jue 07/01
   6. No encuentro horario
 > 1
 [+5491100000002] Elegí un horario para Limpieza facial: (Ver horarios)
@@ -100,11 +100,11 @@
   8. No encuentro horario
 > /cal
 [cal:available] (6)
-  avail_1: 2026-10-27T09:00-03:00 -> 2026-10-27T13:00-03:00 | Disponible
-  avail_2: 2026-10-27T15:00-03:00 -> 2026-10-27T18:00-03:00 | Disponible [VIP]
-  avail_3: 2026-10-28T09:00-03:00 -> 2026-10-28T13:00-03:00 | Disponible
-  avail_4: 2026-10-29T10:00-03:00 -> 2026-10-29T14:00-03:00 | Disponible
-  avail_5: 2026-11-12T10:00-03:00 -> 2026-11-12T13:00-03:00 | Disponible [VIP]
-  evt_1: 2026-11-15T10:00-03:00 -> 2026-11-15T12:00-03:00 | Disponible
+  avail_1: 2026-12-19T09:00-03:00 -> 2026-12-19T13:00-03:00 | Disponible
+  avail_2: 2026-12-19T15:00-03:00 -> 2026-12-19T18:00-03:00 | Disponible [VIP]
+  avail_3: 2026-12-20T09:00-03:00 -> 2026-12-20T13:00-03:00 | Disponible
+  avail_4: 2026-12-21T10:00-03:00 -> 2026-12-21T14:00-03:00 | Disponible
+  avail_5: 2027-01-04T10:00-03:00 -> 2027-01-04T13:00-03:00 | Disponible [VIP]
+  evt_1: 2027-01-07T10:00-03:00 -> 2027-01-07T12:00-03:00 | Disponible
 [cal:turnos] (1)
-  evt_2: 2026-10-27T11:15-03:00 -> 2026-10-27T12:15-03:00 | Limpieza facial – Ana | +5491100000001
+  evt_2: 2026-12-19T11:15-03:00 -> 2026-12-19T12:15-03:00 | Limpieza facial – Ana | +5491100000001

@@ -23,7 +23,7 @@ from app.ports import CalendarError
 DEFAULT_SIM_PHONE = "+5491100000001"
 DEFAULT_ADMIN_PHONE = "+5491100000099"
 DEFAULT_SIM_DB = "sim.db"
-DEFAULT_SIM_TIME = "2026-10-26T09:00:00"
+DEFAULT_SIM_TIME = "2026-12-18T09:00:00"
 
 _OFFSET_RE = re.compile(r"^([+-]?\d+)\s*([dhm])$", re.IGNORECASE)
 
