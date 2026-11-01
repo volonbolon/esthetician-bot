@@ -6,6 +6,9 @@ from app.adapters.console_messenger import ConsoleMessenger
 from app.adapters.fake_messenger import FakeMessenger
 from app.ports import (
     Button,
+    CalendarError,
+    CalendarEvent,
+    CalendarPort,
     ListRow,
     ListSection,
     Messenger,
@@ -188,3 +191,18 @@ async def test_fake_messenger_records_and_taps():
     inc_list = m.tap(2, phone=TO)
     assert inc_list.kind == "list_reply"
     assert inc_list.payload_id == "v1:svc:svc=Peeling"
+
+
+def test_calendar_port_protocol_and_error():
+    err = CalendarError("API timeout")
+    assert isinstance(err, Exception)
+    ev = CalendarEvent(
+        id="e1",
+        start="2026-10-27T09:00",
+        end="2026-10-27T10:00",
+        title="Limpieza facial – Ana",
+        description=TO,
+    )
+    assert ev.id == "e1"
+    assert CalendarPort is not None
+
