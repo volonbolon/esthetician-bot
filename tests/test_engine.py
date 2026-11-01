@@ -6,6 +6,7 @@ import pytest
 from app.adapters.console_messenger import ConsoleMessenger
 from app.adapters.fake_calendar import FakeCalendar
 from app.adapters.fake_messenger import FakeMessenger
+from app.adapters.gcal import GoogleCalendar
 from app.clock import FakeClock, _to_tz
 from app.config import Config
 from app.conversation import (
@@ -350,3 +351,37 @@ async def test_admin_alerts_use_alerta_admin_template_in_console_mode():
     out = buf.getvalue()
     assert f"[TEMPLATE alerta_admin] ({ADMIN})" in out
     assert "Ana (+5491122334455) quiere hablar con vos." in out
+
+
+def test_build_app_wires_adapters_from_config():
+    console_engine = build_app(
+        Config(messenger="console", calendar_backend="fake", db_path=":memory:")
+    )
+    assert isinstance(console_engine.messenger, ConsoleMessenger)
+    assert isinstance(console_engine.calendar, FakeCalendar)
+
+    fake_gcal_engine = build_app(
+        Config(
+            messenger="fake",
+            calendar_backend="google",
+            db_path=":memory:",
+            google_sa_json="{}",
+            cal_available_id="avail_id",
+            cal_turnos_id="turnos_id",
+        )
+    )
+    assert isinstance(fake_gcal_engine.messenger, FakeMessenger)
+    assert isinstance(fake_gcal_engine.calendar, GoogleCalendar)
+
+    with pytest.raises(NotImplementedError):
+        build_app(
+            Config(
+                messenger="cloud",
+                calendar_backend="fake",
+                db_path=":memory:",
+                wa_phone_number_id="1",
+                wa_token="t",
+                wa_app_secret="s",
+                wa_verify_token="v",
+            )
+        )
