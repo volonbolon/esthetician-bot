@@ -134,14 +134,10 @@ async def run_sync(engine: Engine, now: datetime | str | None = None) -> int:
         elif rem["sent_at"] is None:
             expected_send_at = ev_start - timedelta(hours=REMINDER_LEAD_H)
             if _to_tz(rem["send_at"]) != expected_send_at:
-                new_send_at = compute_send_at(ev_start, now_dt)
-                if new_send_at is not None:
-                    engine.db.execute(
-                        "UPDATE reminders SET send_at = ? WHERE event_id = ?",
-                        (new_send_at.isoformat(), ev.id),
-                    )
-                else:
-                    engine.db.execute("DELETE FROM reminders WHERE event_id = ?", (ev.id,))
+                engine.db.execute(
+                    "UPDATE reminders SET send_at = ? WHERE event_id = ?",
+                    (expected_send_at.isoformat(), ev.id),
+                )
 
     # Drop vanished future appointments and unsent reminders
     cached_rows = engine.db.execute(

@@ -1,0 +1,11 @@
+# Sync poller: scan future Turnos -> upsert cache + reminder rows for events with a parseable phone; drop vanished
+/cal add turnos 2026-12-21T10:00 2026-12-21T11:00 Limpieza facial – Ana | 011 15 0000-0001
+/cal add turnos 2026-12-21T12:00 2026-12-21T13:00 Bloqueo personal
+/tick
+/db
+/cal move evt_1 2026-12-21T11:30
+/tick
+/db
+/cal delete evt_1
+/tick
+/db

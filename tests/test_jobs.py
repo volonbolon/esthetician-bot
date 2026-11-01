@@ -259,3 +259,76 @@ async def test_reminder_sender_sends_to_muted_client_and_handles_calendar_error(
     ).fetchone()
     assert rem["sent_at"] == "2026-12-19T10:00:00-03:00"
 
+
+@pytest.mark.asyncio
+async def test_sync_poller_upserts_cache_and_reminders_and_drops_vanished():
+    engine, _, calendar, clock = _make_setup()
+
+    # 1. Manual events in Turnos:
+    # - ev_far (>48h ahead, local phone format in description) -> cached + reminder row created
+    # - ev_near (<48h ahead, parseable phone) -> cached, NO reminder row created
+    # - ev_nophone (no phone in description) -> ignored
+    ev_far = await calendar.create_event(
+        "turnos",
+        "2026-12-22T10:00",
+        "2026-12-22T11:00",
+        "Limpieza facial – Ana",
+        "Tel clienta: 011 15 2233-4455",
+    )
+    ev_near = await calendar.create_event(
+        "turnos",
+        "2026-12-19T11:00",
+        "2026-12-19T12:00",
+        "Peeling – Bea",
+        "+54 9 11 6677-8899",
+    )
+    await calendar.create_event(
+        "turnos",
+        "2026-12-22T14:00",
+        "2026-12-22T15:00",
+        "Bloqueo personal",
+        "Sin telefono",
+    )
+
+    synced = await jobs.run_sync(engine, clock.now())
+    assert synced == 2
+
+    appts = {
+        r["event_id"]: (r["phone"], r["start_at"])
+        for r in engine.db.execute("SELECT event_id, phone, start_at FROM appointments").fetchall()
+    }
+    assert set(appts.keys()) == {ev_far.id, ev_near.id}
+    assert appts[ev_far.id][0] == CLIENT
+    assert appts[ev_near.id][0] == "+5491166778899"
+
+    rems = {
+        r["event_id"]: r["send_at"]
+        for r in engine.db.execute("SELECT event_id, send_at FROM reminders").fetchall()
+    }
+    assert set(rems.keys()) == {ev_far.id}
+    assert rems[ev_far.id].startswith("2026-12-20T10:00")
+
+    # 2. Manual move of ev_far in Calendar -> run_sync updates appointments.start_at and reminders.send_at
+    await calendar.patch_event(
+        "turnos", ev_far.id, start="2026-12-23T16:00", end="2026-12-23T17:00"
+    )
+    await jobs.run_sync(engine, clock.now())
+    appt_row = engine.db.execute(
+        "SELECT start_at FROM appointments WHERE event_id = ?", (ev_far.id,)
+    ).fetchone()
+    rem_row = engine.db.execute(
+        "SELECT send_at FROM reminders WHERE event_id = ?", (ev_far.id,)
+    ).fetchone()
+    assert appt_row["start_at"].startswith("2026-12-23T16:00")
+    assert rem_row["send_at"].startswith("2026-12-21T16:00")
+
+    # 3. Manual deletion of ev_far and phone removal on ev_near -> run_sync drops vanished from cache & reminders
+    await calendar.delete_event("turnos", ev_far.id)
+    await calendar.patch_event("turnos", ev_near.id, description="sin numero")
+
+    synced_after = await jobs.run_sync(engine, clock.now())
+    assert synced_after == 0
+    assert engine.db.execute("SELECT * FROM appointments").fetchall() == []
+    assert engine.db.execute("SELECT * FROM reminders").fetchall() == []
+
+

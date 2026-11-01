@@ -1,0 +1,28 @@
+> /cal add turnos 2026-12-21T10:00 2026-12-21T11:00 Limpieza facial – Ana | 011 15 0000-0001
+[cal] added evt_1 in turnos: 2026-12-21T10:00-03:00 -> 2026-12-21T11:00-03:00 Limpieza facial – Ana
+> /cal add turnos 2026-12-21T12:00 2026-12-21T13:00 Bloqueo personal
+[cal] added evt_2 in turnos: 2026-12-21T12:00-03:00 -> 2026-12-21T13:00-03:00 Bloqueo personal
+> /tick
+[sim] tick @ 2026-12-18T09:00-03:00 (reminders=0)
+> /db
+[db:clients] (0)
+[db:reminders] (1)
+  evt_1: send_at=2026-12-19T10:00:00-03:00 sent_at=None
+[db:mutes] (0)
+> /cal move evt_1 2026-12-21T11:30
+[cal] moved evt_1: 2026-12-21T11:30-03:00 -> 2026-12-21T12:30-03:00
+> /tick
+[sim] tick @ 2026-12-18T09:00-03:00 (reminders=0)
+> /db
+[db:clients] (0)
+[db:reminders] (1)
+  evt_1: send_at=2026-12-19T11:30:00-03:00 sent_at=None
+[db:mutes] (0)
+> /cal delete evt_1
+[cal] deleted evt_1
+> /tick
+[sim] tick @ 2026-12-18T09:00-03:00 (reminders=0)
+> /db
+[db:clients] (0)
+[db:reminders] (0)
+[db:mutes] (0)
