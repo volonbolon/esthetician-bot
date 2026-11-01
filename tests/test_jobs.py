@@ -1,3 +1,4 @@
+import asyncio
 import io
 from pathlib import Path
 
@@ -11,6 +12,7 @@ from app.config import Config
 from app.conversation import Incoming
 from app.db import init_db
 from app.engine import Engine, build_app
+from app.main import create_app
 from app.sim import Simulator
 
 CLIENT = "+5491122334455"
@@ -457,6 +459,57 @@ async def test_reminder_buttons_confirm_resched_cancel_and_cutoff():
         == "Tu turno de Limpieza facial del Lun 21/12 10:00 fue cancelado."
     )
     assert await calendar.get_event("turnos", ev.id) is None
+
+
+@pytest.mark.asyncio
+async def test_production_loop_wrappers_started_from_fastapi_lifespan_outside_sim():
+    assert jobs.REMINDER_POLL_INTERVAL_S == 60.0
+    assert jobs.SYNC_POLL_INTERVAL_S == 900.0
+
+    # 1. Outside sim (messenger != "console"): lifespan starts reminder_loop + sync_loop
+    engine, messenger, calendar, clock = _make_setup()
+    ev = await calendar.create_event(
+        "turnos",
+        "2026-12-20T09:00",
+        "2026-12-20T10:00",
+        "Limpieza facial – Ana",
+        CLIENT,
+    )
+    app = create_app(engine, reminder_interval_s=0.01, sync_interval_s=0.01)
+
+    async with app.router.lifespan_context(app):
+        assert len(app.state.job_tasks) == 2
+        assert {t.get_name() for t in app.state.job_tasks} == {
+            "reminder_loop",
+            "sync_loop",
+        }
+        await asyncio.sleep(0.05)
+        # sync_loop populated reminder and reminder_loop sent it (since send_at == 2026-12-18T09:00 == clock.now())
+        rem = engine.db.execute(
+            "SELECT sent_at FROM reminders WHERE event_id = ?", (ev.id,)
+        ).fetchone()
+        assert rem is not None and rem["sent_at"] is not None
+        assert messenger.last_message(CLIENT) is not None
+
+    assert all(t.done() for t in app.state.job_tasks)
+
+    # 2. Console / sim mode (messenger == "console"): background loops are NOT started
+    console_cfg = Config(
+        messenger="console",
+        calendar_backend="fake",
+        db_path=":memory:",
+    )
+    console_engine = build_app(
+        console_cfg,
+        db=init_db(":memory:"),
+        messenger=FakeMessenger(),
+        calendar=FakeCalendar(),
+        clock=clock,
+    )
+    console_app = create_app(console_engine)
+    async with console_app.router.lifespan_context(console_app):
+        assert console_app.state.job_tasks == []
+
 
 
 

@@ -1,3 +1,5 @@
+import asyncio
+import logging
 from datetime import datetime, timedelta
 
 from app.clock import _to_tz
@@ -7,6 +9,11 @@ from app.events import extract_phone, parse_title
 from app.payloads import encode
 from app.ports import CalendarError
 from app.reminders import REMINDER_LEAD_H, compute_send_at
+
+logger = logging.getLogger(__name__)
+
+REMINDER_POLL_INTERVAL_S = 60.0
+SYNC_POLL_INTERVAL_S = 900.0
 
 
 async def run_reminders(engine: Engine, now: datetime | str | None = None) -> int:
@@ -168,3 +175,30 @@ async def run_sync(engine: Engine, now: datetime | str | None = None) -> int:
 
     engine.db.commit()
     return len(seen_ids)
+
+
+async def reminder_loop(
+    engine: Engine, interval_s: float = REMINDER_POLL_INTERVAL_S
+) -> None:
+    while True:
+        try:
+            await run_reminders(engine)
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logger.exception("reminder_loop error")
+        await asyncio.sleep(interval_s)
+
+
+async def sync_loop(
+    engine: Engine, interval_s: float = SYNC_POLL_INTERVAL_S
+) -> None:
+    while True:
+        try:
+            await run_sync(engine)
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logger.exception("sync_loop error")
+        await asyncio.sleep(interval_s)
+
