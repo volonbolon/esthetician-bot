@@ -1,0 +1,111 @@
+> hola
+[+5491100000001] Hola! Guardamos tu número y nombre únicamente para gestionar tus turnos. ¿Cómo es tu nombre?
+> Ana
+[+5491100000001] ¿En qué te puedo ayudar?
+  1. [Reservar]
+  2. [Mi turno]
+  3. [Hablar con Lorena]
+> 1
+[+5491100000001] Elegí un servicio: (Servicios)
+  -- Servicios --
+  1. Limpieza facial — 60 min
+  2. Peeling — 45 min
+  3. Dermaplaning — 60 min
+> 1
+[+5491100000001] Elegí un día para Limpieza facial: (Ver días)
+  -- Días disponibles --
+  1. Sáb 19/12
+  2. Dom 20/12
+  3. Lun 21/12
+> 1
+[+5491100000001] Elegí un horario para Limpieza facial: (Ver horarios)
+  -- Horarios --
+  1. 09:00
+  2. 09:15
+  3. 09:30
+  4. 09:45
+  5. 10:00
+  6. 10:15
+  7. 10:30
+  8. 10:45
+  9. 11:00
+  10. Ver más
+> 1
+[+5491100000001] ¿Confirmás Limpieza facial el Sáb 19/12 09:00?
+  1. [Confirmar]
+  2. [Cancelar]
+> /calfail
+[sim] next calendar call will fail
+> 1
+[+5491100000001] Hubo un problema con la agenda. Por favor intentá de nuevo en unos minutos.
+[TEMPLATE alerta_admin] (+5491100000099) Error de Google Calendar atendiendo a +5491100000001: Simulated calendar failure
+> /cal
+[cal:available] (5)
+  avail_1: 2026-12-19T09:00-03:00 -> 2026-12-19T13:00-03:00 | Disponible
+  avail_2: 2026-12-19T15:00-03:00 -> 2026-12-19T18:00-03:00 | Disponible [VIP]
+  avail_3: 2026-12-20T09:00-03:00 -> 2026-12-20T13:00-03:00 | Disponible
+  avail_4: 2026-12-21T10:00-03:00 -> 2026-12-21T14:00-03:00 | Disponible
+  avail_5: 2027-01-04T10:00-03:00 -> 2027-01-04T13:00-03:00 | Disponible [VIP]
+[cal:turnos] (0)
+> 1
+[+5491100000001] ¿En qué te puedo ayudar?
+  1. [Reservar]
+  2. [Mi turno]
+  3. [Hablar con Lorena]
+> /calfail
+[sim] next calendar call will fail
+> 1
+[+5491100000001] Elegí un servicio: (Servicios)
+  -- Servicios --
+  1. Limpieza facial — 60 min
+  2. Peeling — 45 min
+  3. Dermaplaning — 60 min
+> 1
+[+5491100000001] Hubo un problema con la agenda. Por favor intentá de nuevo en unos minutos.
+[TEMPLATE alerta_admin] (+5491100000099) Error de Google Calendar atendiendo a +5491100000001: Simulated calendar failure
+> 1
+[+5491100000001] ¿En qué te puedo ayudar?
+  1. [Reservar]
+  2. [Mi turno]
+  3. [Hablar con Lorena]
+> 1
+[+5491100000001] Elegí un servicio: (Servicios)
+  -- Servicios --
+  1. Limpieza facial — 60 min
+  2. Peeling — 45 min
+  3. Dermaplaning — 60 min
+> 1
+[+5491100000001] Elegí un día para Limpieza facial: (Ver días)
+  -- Días disponibles --
+  1. Sáb 19/12
+  2. Dom 20/12
+  3. Lun 21/12
+> 1
+[+5491100000001] Elegí un horario para Limpieza facial: (Ver horarios)
+  -- Horarios --
+  1. 09:00
+  2. 09:15
+  3. 09:30
+  4. 09:45
+  5. 10:00
+  6. 10:15
+  7. 10:30
+  8. 10:45
+  9. 11:00
+  10. Ver más
+> 1
+[+5491100000001] ¿Confirmás Limpieza facial el Sáb 19/12 09:00?
+  1. [Confirmar]
+  2. [Cancelar]
+> 1
+[+5491100000001] Listo! Reservamos tu turno de Limpieza facial para el Sáb 19/12 09:00.
+[TEMPLATE alerta_admin] (+5491100000099) Nuevo turno: Limpieza facial – Ana (+5491100000001) el Sáb 19/12 09:00.
+> /cal
+[cal:available] (5)
+  avail_1: 2026-12-19T09:00-03:00 -> 2026-12-19T13:00-03:00 | Disponible
+  avail_2: 2026-12-19T15:00-03:00 -> 2026-12-19T18:00-03:00 | Disponible [VIP]
+  avail_3: 2026-12-20T09:00-03:00 -> 2026-12-20T13:00-03:00 | Disponible
+  avail_4: 2026-12-21T10:00-03:00 -> 2026-12-21T14:00-03:00 | Disponible
+  avail_5: 2027-01-04T10:00-03:00 -> 2027-01-04T13:00-03:00 | Disponible [VIP]
+[cal:turnos] (1)
+  evt_1: 2026-12-19T09:00-03:00 -> 2026-12-19T10:00-03:00 | Limpieza facial – Ana | +5491100000001

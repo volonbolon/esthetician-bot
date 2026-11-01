@@ -1,0 +1,27 @@
+# 1. Onboard Ana and reach booking confirmation
+hola
+Ana
+1
+1
+1
+1
+
+# 2. Inject Calendar failure on confirm -> client told to retry later + admin alert; no event created
+/calfail
+1
+/cal
+
+# 3. Inject Calendar failure on day listing -> client told to retry later + admin alert
+1
+/calfail
+1
+
+# 4. Retry booking when Calendar recovers -> succeeds
+1
+1
+1
+1
+1
+1
+1
+/cal
