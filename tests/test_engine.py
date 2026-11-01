@@ -1,7 +1,9 @@
 import asyncio
+import io
 
 import pytest
 
+from app.adapters.console_messenger import ConsoleMessenger
 from app.adapters.fake_calendar import FakeCalendar
 from app.adapters.fake_messenger import FakeMessenger
 from app.clock import FakeClock, _to_tz
@@ -315,3 +317,36 @@ async def test_admin_commands_and_echo_routing():
         Incoming(wamid="a5", from_phone=ADMIN, kind="text", text="foobar")
     )
     assert "Comandos disponibles" in messenger.last_message(ADMIN).text
+
+
+@pytest.mark.asyncio
+async def test_admin_alerts_use_alerta_admin_template_in_console_mode():
+    buf = io.StringIO()
+    cfg = Config(
+        messenger="console",
+        calendar_backend="fake",
+        db_path=":memory:",
+        esthetician_name="Valeria",
+        admin_phones=(ADMIN,),
+    )
+    engine = build_app(
+        cfg,
+        messenger=ConsoleMessenger(stream=buf),
+        calendar=FakeCalendar(),
+        clock=FakeClock("2026-10-26T09:00:00"),
+    )
+
+    await engine.handle_incoming(Incoming(wamid="c1", from_phone=CLIENT_A, text="hola"))
+    await engine.handle_incoming(Incoming(wamid="c2", from_phone=CLIENT_A, text="Ana"))
+    await engine.handle_incoming(
+        Incoming(
+            wamid="c3",
+            from_phone=CLIENT_A,
+            kind="button_reply",
+            payload_id=encode("talk"),
+        )
+    )
+
+    out = buf.getvalue()
+    assert f"[TEMPLATE alerta_admin] ({ADMIN})" in out
+    assert "Ana (+5491122334455) quiere hablar con vos." in out
