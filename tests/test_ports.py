@@ -1,9 +1,14 @@
+import io
+
 import pytest
 
+from app.adapters.console_messenger import ConsoleMessenger
+from app.adapters.fake_messenger import FakeMessenger
 from app.ports import (
     Button,
     ListRow,
     ListSection,
+    Messenger,
     validate_buttons,
     validate_list,
     validate_template,
@@ -105,3 +110,81 @@ def test_validate_template_limits():
             ("Ana",),
             tuple(Button(id=f"b{i}", title="Ok") for i in range(4)),
         )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("factory", [FakeMessenger, lambda: ConsoleMessenger(io.StringIO())])
+async def test_every_messenger_enforces_shared_limits(factory):
+    m: Messenger = factory()
+    assert isinstance(m, Messenger)
+
+    with pytest.raises(ValueError):
+        await m.send_text(TO, "")
+
+    with pytest.raises(ValueError):
+        await m.send_list(
+            TO,
+            "Body",
+            "Ver",
+            (ListSection(title="S", rows=tuple(ListRow(id=f"i{i}", title="T") for i in range(11))),),
+        )
+
+    with pytest.raises(ValueError):
+        await m.send_list(
+            TO,
+            "Body",
+            "Ver",
+            (ListSection(title="S", rows=(ListRow(id="i1", title="x" * 25),)),),
+        )
+
+    with pytest.raises(ValueError):
+        await m.send_buttons(
+            TO,
+            "Body",
+            tuple(Button(id=f"b{i}", title="Btn") for i in range(4)),
+        )
+
+    with pytest.raises(ValueError):
+        await m.send_buttons(TO, "Body", (Button(id="b1", title="x" * 21),))
+
+    with pytest.raises(ValueError):
+        await m.send_template(TO, "", ("param",))
+
+
+@pytest.mark.asyncio
+async def test_fake_messenger_records_and_taps():
+    m = FakeMessenger()
+    await m.send_buttons(
+        TO,
+        "Menú",
+        (
+            Button(id="v1:svc", title="Reservar"),
+            Button(id="v1:mine", title="Mi turno"),
+        ),
+    )
+    last = m.last_message(TO)
+    assert last is not None
+    assert last.kind == "buttons"
+
+    inc = m.tap("Reservar", phone=TO)
+    assert inc.kind == "button_reply"
+    assert inc.payload_id == "v1:svc"
+    assert inc.from_phone == TO
+
+    await m.send_list(
+        TO,
+        "Elegí servicio:",
+        "Servicios",
+        (
+            ListSection(
+                title="Servicios",
+                rows=(
+                    ListRow(id="v1:svc:svc=Facial", title="Facial"),
+                    ListRow(id="v1:svc:svc=Peeling", title="Peeling"),
+                ),
+            ),
+        ),
+    )
+    inc_list = m.tap(2, phone=TO)
+    assert inc_list.kind == "list_reply"
+    assert inc_list.payload_id == "v1:svc:svc=Peeling"
