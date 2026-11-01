@@ -691,3 +691,77 @@ def test_active_appointment_lookup_by_normalized_phone_in_turnos_descriptions():
     )
     assert isinstance(none_actions[0], SendButtons)
     assert none_actions[0].body == "No tenés ningún turno agendado."
+
+
+def test_mi_turno_with_reprogramar_and_cancelar_buttons():
+    # 1. No active appointment -> Reservar / Menú buttons
+    empty_actions = handle(
+        _client(),
+        Incoming(wamid="m1", from_phone=PHONE, kind="button_reply", payload_id=encode("mine")),
+        _ctx(now="2026-10-26T09:00", turnos=[]),
+    )
+    assert empty_actions == [
+        SendButtons(
+            to=PHONE,
+            body="No tenés ningún turno agendado.",
+            buttons=(
+                Button(id=encode("svc"), title="Reservar"),
+                Button(id=encode("menu"), title="Menú"),
+            ),
+        )
+    ]
+
+    # 2. Active appointment (including ✅ prefix) -> Reprogramar / Cancelar buttons
+    ev = CalendarEvent(
+        id="evt_99",
+        start="2026-10-29T10:00",
+        end="2026-10-29T11:00",
+        title="✅ Limpieza facial – Ana",
+        description=PHONE,
+    )
+    ctx = _ctx(now="2026-10-26T09:00", turnos=[ev])
+    mine_actions = handle(
+        _client(),
+        Incoming(wamid="m2", from_phone=PHONE, kind="button_reply", payload_id=encode("mine")),
+        ctx,
+    )
+    assert mine_actions == [
+        SendButtons(
+            to=PHONE,
+            body="Tu turno: Limpieza facial el Jue 29/10 10:00.",
+            buttons=(
+                Button(id=encode("resched", evt="evt_99"), title="Reprogramar"),
+                Button(id=encode("cancel", evt="evt_99"), title="Cancelar"),
+            ),
+        )
+    ]
+
+    # 3. Tap Reprogramar button -> opens service list carrying resched=evt_99
+    resched_tap = handle(
+        _client(),
+        Incoming(
+            wamid="m3",
+            from_phone=PHONE,
+            kind="button_reply",
+            payload_id=mine_actions[0].buttons[0].id,
+        ),
+        ctx,
+    )
+    assert len(resched_tap) == 1
+    assert isinstance(resched_tap[0], SendList)
+    assert resched_tap[0].rows[0].id == encode("svc", svc="Limpieza facial", resched="evt_99")
+
+    # 4. Tap Cancelar button -> Cancel + SendText + AlertAdmin
+    cancel_tap = handle(
+        _client(),
+        Incoming(
+            wamid="m4",
+            from_phone=PHONE,
+            kind="button_reply",
+            payload_id=mine_actions[0].buttons[1].id,
+        ),
+        ctx,
+    )
+    assert cancel_tap[0] == Cancel(phone=PHONE, event_id="evt_99")
+    assert isinstance(cancel_tap[1], SendText)
+    assert isinstance(cancel_tap[2], AlertAdmin)
