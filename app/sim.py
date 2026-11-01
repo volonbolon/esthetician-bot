@@ -102,8 +102,16 @@ class Simulator:
         if line.isdigit():
             idx = int(line)
             if self._can_tap_number(idx):
-                inc = self.messenger.tap(
+                tapped = self.messenger.tap(
                     idx, phone=self.active_phone, wamid=self._next_wamid()
+                )
+                inc = Incoming(
+                    wamid=tapped.wamid,
+                    from_phone=tapped.from_phone,
+                    kind=tapped.kind,
+                    text=tapped.text,
+                    payload_id=tapped.payload_id,
+                    timestamp=self.clock.now(),
                 )
                 await self.engine.handle_incoming(inc)
                 return
