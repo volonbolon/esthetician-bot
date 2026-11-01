@@ -605,6 +605,74 @@ async def test_restart_safety_reminder_sent_exactly_once_across_two_engines_shar
     engine3.db.close()
 
 
+@pytest.mark.asyncio
+async def test_jobs_edge_cases_unstructured_title_orphan_reminders_and_loop_errors():
+    engine, messenger, calendar, _ = _make_setup()
+    engine.db.execute(
+        "INSERT INTO clients(phone, name, awaiting_name, created_at) VALUES (?, ?, 0, ?)",
+        (CLIENT, "Ana", "2026-12-18T09:00:00-03:00"),
+    )
+    engine.db.commit()
+
+    # 1. Event with unstructured title (no " – ") and phone removed from description -> falls back to appointments cache & client.name
+    ev1 = await calendar.create_event(
+        "turnos",
+        "2026-12-20T09:00",
+        "2026-12-20T10:00",
+        "Turno especial",
+        "",
+    )
+    engine.db.execute(
+        "INSERT INTO appointments(event_id, phone, start_at) VALUES (?, ?, ?)",
+        (ev1.id, CLIENT, "2026-12-20T09:00:00-03:00"),
+    )
+    engine.db.execute(
+        "INSERT INTO reminders(event_id, send_at, sent_at) VALUES (?, ?, NULL)",
+        (ev1.id, "2026-12-18T09:00:00-03:00"),
+    )
+    # 2. Due reminder whose event has no phone in description and no appointments row -> dropped
+    ev2 = await calendar.create_event(
+        "turnos",
+        "2026-12-20T09:00",
+        "2026-12-20T10:00",
+        "Sin telefono",
+        "",
+    )
+    engine.db.execute(
+        "INSERT INTO reminders(event_id, send_at, sent_at) VALUES (?, ?, NULL)",
+        (ev2.id, "2026-12-18T09:00:00-03:00"),
+    )
+    # 3. Orphan unsent reminder (not in appointments table, event deleted) -> cleaned up by run_sync
+    engine.db.execute(
+        "INSERT INTO reminders(event_id, send_at, sent_at) VALUES (?, ?, NULL)",
+        ("orphan_evt", "2026-12-25T09:00:00-03:00"),
+    )
+    engine.db.commit()
+
+    assert await jobs.run_reminders(engine) == 1
+    msg = messenger.last_message(CLIENT)
+    assert msg is not None and msg.template_params == (
+        "Ana",
+        "Turno especial",
+        "Dom 20/12 09:00",
+    )
+    assert (
+        engine.db.execute(
+            "SELECT * FROM reminders WHERE event_id = ?", (ev2.id,)
+        ).fetchone()
+        is None
+    )
+
+    await jobs.run_sync(engine)
+    assert (
+        engine.db.execute(
+            "SELECT * FROM reminders WHERE event_id = 'orphan_evt'"
+        ).fetchone()
+        is None
+    )
+
+
+
 
 
 
