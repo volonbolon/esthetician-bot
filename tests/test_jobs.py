@@ -511,5 +511,100 @@ async def test_production_loop_wrappers_started_from_fastapi_lifespan_outside_si
         assert console_app.state.job_tasks == []
 
 
+@pytest.mark.asyncio
+async def test_restart_safety_reminder_sent_exactly_once_across_two_engines_sharing_db(
+    tmp_path: Path,
+):
+    db_file = tmp_path / "shared_bot.db"
+    cfg = Config(
+        messenger="fake",
+        calendar_backend="fake",
+        db_path=str(db_file),
+        esthetician_name="Lorena",
+        admin_phones=(ADMIN,),
+    )
+    calendar = FakeCalendar()
+    await calendar.create_event(
+        "available",
+        "2026-12-21T10:00",
+        "2026-12-21T13:00",
+        "Disponible",
+    )
+    clock = FakeClock("2026-12-18T09:00:00")
+    messenger1 = FakeMessenger()
+
+    # Instance 1: client onboards and books Lun 21/12 10:00 (reminder due 2026-12-19T10:00)
+    engine1 = build_app(
+        cfg,
+        db=init_db(db_file),
+        messenger=messenger1,
+        calendar=calendar,
+        clock=clock,
+    )
+    await engine1.handle_incoming(
+        Incoming(wamid="rs1", from_phone=CLIENT, kind="text", text="hola")
+    )
+    await engine1.handle_incoming(
+        Incoming(wamid="rs2", from_phone=CLIENT, kind="text", text="Ana")
+    )
+    await engine1.handle_incoming(
+        Incoming(
+            wamid="rs3",
+            from_phone=CLIENT,
+            kind="button_reply",
+            payload_id="v1:confirm:svc=Limpieza facial;t=2026-12-21T10:00",
+        )
+    )
+    assert await jobs.run_reminders(engine1) == 0
+
+    # Simulate process restart before due time -> Instance 2 opens the same DB file
+    engine1.db.close()
+    messenger2 = FakeMessenger()
+    engine2 = build_app(
+        cfg,
+        db=init_db(db_file),
+        messenger=messenger2,
+        calendar=calendar,
+        clock=clock,
+    )
+
+    # Advance to due time (48h before appointment); Instance 2 sends the reminder
+    clock.set("2026-12-19T10:00:00")
+    assert await jobs.run_reminders(engine2) == 1
+
+    # Simulate another restart / second engine instance sharing the same DB after send
+    messenger3 = FakeMessenger()
+    engine3 = build_app(
+        cfg,
+        db=init_db(db_file),
+        messenger=messenger3,
+        calendar=calendar,
+        clock=clock,
+    )
+    clock.advance(minutes=5)
+    await jobs.run_sync(engine3)
+    assert await jobs.run_reminders(engine3) == 0
+    assert await jobs.run_reminders(engine2) == 0
+
+    sent_templates = [
+        m
+        for m in (
+            *messenger1.messages_for(CLIENT),
+            *messenger2.messages_for(CLIENT),
+            *messenger3.messages_for(CLIENT),
+        )
+        if m.kind == "template" and m.template_name == "recordatorio_turno"
+    ]
+    assert len(sent_templates) == 1
+    assert sent_templates[0].template_params == (
+        "Ana",
+        "Limpieza facial",
+        "Lun 21/12 10:00",
+    )
+    engine2.db.close()
+    engine3.db.close()
+
+
+
 
 
