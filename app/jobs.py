@@ -75,9 +75,9 @@ async def run_reminders(engine: Engine, now: datetime | None = None) -> int:
         client_name = parsed[1] if parsed else "clienta"
 
         buttons = (
-            Button(id=encode("rem_confirm", evt=ev.id), title="Confirmar"),
-            Button(id=encode("rem_resched", evt=ev.id), title="Reprogramar"),
-            Button(id=encode("rem_cancel", evt=ev.id), title="Cancelar"),
+            Button(id=encode("rem:confirm", evt=ev.id), title="Confirmar"),
+            Button(id=encode("rem:resched", evt=ev.id), title="Reprogramar"),
+            Button(id=encode("rem:cancel", evt=ev.id), title="Cancelar"),
         )
         await engine.messenger.send_template(
             phone,

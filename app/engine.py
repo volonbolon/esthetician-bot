@@ -89,7 +89,7 @@ class Engine:
         self.db.execute(
             """
             INSERT OR IGNORE INTO clients (phone, name, vip, muted_until, awaiting_name, created_at)
-            VALUES (?, NULL, 0, NULL, 1, ?)
+            VALUES (?, NULL, 0, NULL, 0, ?)
             """,
             (phone, now.isoformat()),
         )

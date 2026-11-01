@@ -98,12 +98,37 @@ def test_awaiting_name_stores_name_and_shows_main_menu():
     state = _client(name=None, awaiting_name=True)
     actions = handle(
         state,
-        Incoming(wamid="w2", from_phone=PHONE, kind="text", text="  Ana Pérez  "),
+        Incoming(wamid="w2", from_phone="011 15 2233-4455", kind="text", text="  Ana Pérez  "),
         _ctx(),
     )
     assert actions[0] == SetName(phone=PHONE, name="Ana Pérez", awaiting_name=False)
     assert isinstance(actions[1], SendButtons)
     assert [b.title for b in actions[1].buttons] == ["Reservar", "Mi turno", "Hablar con Valeria"]
+
+
+def test_awaiting_name_blank_text_reprompts_and_pre_vip_gets_data_notice():
+    # Pre-created VIP row with name=None, awaiting_name=False still gets DATA_NOTICE first
+    pre_vip = _client(name=None, vip=True, awaiting_name=False)
+    first_actions = handle(
+        pre_vip,
+        Incoming(wamid="w1", from_phone=PHONE, kind="text", text="hola"),
+        _ctx(),
+    )
+    assert first_actions == [
+        SetName(phone=PHONE, name=None, awaiting_name=True),
+        SendText(to=PHONE, text=DATA_NOTICE),
+    ]
+
+    # Blank text while awaiting_name reprompts
+    awaiting = _client(name=None, vip=True, awaiting_name=True)
+    reprompt = handle(
+        awaiting,
+        Incoming(wamid="w2", from_phone=PHONE, kind="text", text="   "),
+        _ctx(),
+    )
+    assert reprompt == [
+        SendText(to=PHONE, text="Por favor escribí tu nombre para continuar.")
+    ]
 
 
 def test_off_script_message_shows_main_menu():
