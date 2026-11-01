@@ -189,7 +189,22 @@ async def test_execute_actions_reschedule_cancel_confirm_event_and_vip_alert():
     assert updated_old is not None
     assert updated_old.title.startswith("✅ ")
 
-    # 2. Reschedule creates new event, deletes old event, and updates DB rows
+    # 2. Reschedule creates new event FIRST, then deletes old event, and updates DB rows
+    call_order: list[str] = []
+    orig_create = calendar.create_event
+    orig_delete = calendar.delete_event
+
+    async def tracked_create(*args, **kwargs):
+        call_order.append("create")
+        return await orig_create(*args, **kwargs)
+
+    async def tracked_delete(*args, **kwargs):
+        call_order.append("delete")
+        return await orig_delete(*args, **kwargs)
+
+    calendar.create_event = tracked_create  # type: ignore[method-assign]
+    calendar.delete_event = tracked_delete  # type: ignore[method-assign]
+
     await engine.execute_actions(
         [
             Reschedule(
@@ -207,6 +222,7 @@ async def test_execute_actions_reschedule_cancel_confirm_event_and_vip_alert():
             ),
         ]
     )
+    assert call_order == ["create", "delete"]
     assert await calendar.get_event("turnos", old_ev.id) is None
     turnos = await calendar.list_events("turnos", "2026-10-30T00:00", "2026-10-31T00:00")
     assert len(turnos) == 1

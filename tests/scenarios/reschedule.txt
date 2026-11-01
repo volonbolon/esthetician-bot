@@ -1,0 +1,22 @@
+# Reschedule flow: book evt_1 -> one-active blocks new Reservar on Confirmar -> Reprogramar books evt_2 first, deletes evt_1, alerts admin
+hola
+Ana
+1
+1
+3
+1
+1
+hola
+1
+1
+1
+1
+1
+2
+1
+2
+3
+3
+1
+/cal
+/db

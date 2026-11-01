@@ -22,7 +22,7 @@ from app.conversation import (
     SetName,
     handle,
 )
-from app.payloads import encode
+from app.payloads import decode, encode
 from app.slots import Block
 
 PHONE = "+5491122334455"
@@ -575,7 +575,14 @@ def test_reschedule_and_reminder_confirm():
         title="Limpieza facial – Ana",
         description=PHONE,
     )
-    ctx = _ctx(now="2026-10-26T09:00", turnos=[ev])
+    ctx = _ctx(
+        now="2026-10-26T09:00",
+        blocks=[
+            Block("2026-10-27T09:00", "2026-10-27T11:00"),
+            Block("2026-10-29T10:00", "2026-10-29T12:00"),
+        ],
+        turnos=[ev],
+    )
 
     # Reminder confirm button
     rem_actions = handle(
@@ -591,7 +598,49 @@ def test_reschedule_and_reminder_confirm():
     assert rem_actions[0] == ConfirmEvent(phone=PHONE, event_id="evt1")
     assert isinstance(rem_actions[1], SendText)
 
-    # Reschedule confirm excludes old event from one-active rule
+    # Starting reschedule outside 24h cutoff -> service picker carrying resched="evt1"
+    start_resched = handle(
+        _client(),
+        Incoming(
+            wamid="w20b",
+            from_phone=PHONE,
+            kind="button_reply",
+            payload_id=encode("resched", evt="evt1"),
+        ),
+        ctx,
+    )
+    assert isinstance(start_resched[0], SendList)
+    assert decode(start_resched[0].rows[0].id).get("resched") == "evt1"
+
+    # Starting reschedule inside 24h cutoff -> contact her + alert, no reschedule
+    inside_resched = handle(
+        _client(),
+        Incoming(
+            wamid="w20c",
+            from_phone=PHONE,
+            kind="button_reply",
+            payload_id=encode("resched", evt="evt1"),
+        ),
+        _ctx(now="2026-10-28T12:00", turnos=[ev]),
+    )
+    assert inside_resched == [
+        SendText(
+            to=PHONE,
+            text=(
+                "Faltan menos de 24h para tu turno. "
+                "Por favor hablá directamente con Lorena para reprogramar."
+            ),
+        ),
+        AlertAdmin(
+            text=(
+                f"Ana ({PHONE}) intentó reprogramar su turno de Limpieza facial "
+                "del Jue 29/10 10:00 con menos de 24h."
+            )
+        ),
+    ]
+
+    # Reschedule confirm excludes old event from one-active rule and busy intervals,
+    # emits Reschedule -> SendText -> AlertAdmin
     resched_actions = handle(
         _client(),
         Incoming(
@@ -599,18 +648,27 @@ def test_reschedule_and_reminder_confirm():
             from_phone=PHONE,
             kind="button_reply",
             payload_id=encode(
-                "confirm", svc="Limpieza facial", t="2026-10-27T09:00", resched="evt1"
+                "confirm", svc="Peeling", t="2026-10-29T10:30", resched="evt1"
             ),
         ),
         ctx,
     )
-    assert resched_actions[0] == Reschedule(
-        phone=PHONE,
-        old_event_id="evt1",
-        service="Limpieza facial",
-        new_start=_dt("2026-10-27T09:00"),
-        client_name="Ana",
-    )
+    assert resched_actions == [
+        Reschedule(
+            phone=PHONE,
+            old_event_id="evt1",
+            service="Peeling",
+            new_start=_dt("2026-10-29T10:30"),
+            client_name="Ana",
+        ),
+        SendText(
+            to=PHONE,
+            text="Listo! Reprogramamos tu turno de Peeling para el Jue 29/10 10:30.",
+        ),
+        AlertAdmin(
+            text=f"Turno reprogramado: Peeling – Ana ({PHONE}) para Jue 29/10 10:30."
+        ),
+    ]
 
 
 def test_vip_sees_no_encuentro_horario_row_and_rate_limits_alert():
