@@ -123,16 +123,18 @@ async def test_google_calendar_adapter_crud_and_error_wrapping():
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("backend", ["fake", "google_contract"])
+@pytest.mark.parametrize("backend", ["fake", "google"])
 async def test_calendar_contract_suite(backend: str):
-    if backend == "google_contract":
-        if not os.environ.get("RUN_GCAL_CONTRACT"):
-            pytest.skip("Set RUN_GCAL_CONTRACT=1 to run against live Google Calendar")
+    if backend == "google":
+        if not (os.environ.get("RUN_GCAL_CONTRACT") or os.environ.get("GCAL_CONTRACT")):
+            pytest.skip("Set RUN_GCAL_CONTRACT=1 to run contract suite against GoogleCalendar")
         cal: CalendarPort = GoogleCalendar(sa_json=os.environ["GOOGLE_SA_JSON"])
         cal_id = os.environ["CAL_TURNOS_ID"]
     else:
         cal = FakeCalendar()
         cal_id = "turnos"
+
+    assert await cal.get_event(cal_id, "nonexistent_evt_id") is None
 
     created = await cal.create_event(
         cal_id,
@@ -145,9 +147,24 @@ async def test_calendar_contract_suite(backend: str):
         fetched = await cal.get_event(cal_id, created.id)
         assert fetched is not None
         assert fetched.title == "Peeling – Test"
+        assert fetched.description == "+5491122334455"
 
-        updated = await cal.patch_event(cal_id, created.id, title="✅ Peeling – Test")
+        in_window = await cal.list_events(cal_id, "2026-10-27T13:00", "2026-10-27T16:00")
+        assert any(e.id == created.id for e in in_window)
+
+        out_of_window = await cal.list_events(cal_id, "2026-10-28T00:00", "2026-10-29T00:00")
+        assert all(e.id != created.id for e in out_of_window)
+
+        updated = await cal.patch_event(
+            cal_id,
+            created.id,
+            start="2026-10-27T15:00",
+            end="2026-10-27T16:00",
+            title="✅ Peeling – Test",
+        )
         assert updated.title == "✅ Peeling – Test"
+        assert updated.start.hour == 15
     finally:
         await cal.delete_event(cal_id, created.id)
+
     assert await cal.get_event(cal_id, created.id) is None
