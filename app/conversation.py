@@ -428,6 +428,19 @@ def _find_event_by_id(ctx: ConversationContext, event_id: str) -> Any | None:
     return None
 
 
+def _get_owned_future_event(
+    ctx: ConversationContext, phone: str, event_id: str | None
+) -> Any | None:
+    if not event_id:
+        return None
+    ev = _find_event_by_id(ctx, event_id)
+    if ev is None or _to_tz(ev.start) <= ctx.now:
+        return None
+    if extract_phone(getattr(ev, "description", "")) != normalize_phone(phone):
+        return None
+    return ev
+
+
 def _find_active_appointment(
     ctx: ConversationContext, phone: str, *, exclude_event_id: str | None = None
 ) -> Any | None:
@@ -458,6 +471,13 @@ def _handle_payload(
     phone: str, client: ClientState, payload: Payload, ctx: ConversationContext
 ) -> list[Action]:
     kind = payload.kind
+
+    resched_id = payload.get("resched")
+    resched_ev = None
+    if resched_id is not None:
+        resched_ev = _get_owned_future_event(ctx, phone, resched_id)
+        if resched_ev is None:
+            return [SendText(to=phone, text=STALE_TAP_TEXT), _main_menu(phone, ctx)]
 
     if kind == "menu":
         return [_main_menu(phone, ctx)]
@@ -564,16 +584,14 @@ def _handle_payload(
         except (KeyError, ValueError):
             return [SendText(to=phone, text=STALE_TAP_TEXT), _main_menu(phone, ctx)]
 
-        if resched:
-            old_ev = _find_event_by_id(ctx, resched)
-            if (
-                old_ev is None
-                or _to_tz(old_ev.start) <= ctx.now
-                or extract_phone(getattr(old_ev, "description", "")) != normalize_phone(phone)
-            ):
-                return [SendText(to=phone, text=STALE_TAP_TEXT), _main_menu(phone, ctx)]
-            if within_cutoff(old_ev.start, ctx.now, ctx.services_cfg.cancel_cutoff_h):
-                return _inside_cutoff_actions(phone, client, old_ev, ctx, action_label="reprogramar")
+        if (
+            resched
+            and resched_ev is not None
+            and within_cutoff(resched_ev.start, ctx.now, ctx.services_cfg.cancel_cutoff_h)
+        ):
+            return _inside_cutoff_actions(
+                phone, client, resched_ev, ctx, action_label="reprogramar"
+            )
 
         existing = _find_active_appointment(ctx, phone, exclude_event_id=resched)
         if existing is not None:
@@ -673,13 +691,8 @@ def _handle_payload(
         ]
 
     if kind in ("cancel", "resched", "rem:confirm", "rem:resched", "rem:cancel"):
-        evt_id = payload.get("evt")
-        if not evt_id:
-            return [SendText(to=phone, text=STALE_TAP_TEXT), _main_menu(phone, ctx)]
-        ev = _find_event_by_id(ctx, evt_id)
-        if ev is None or _to_tz(ev.start) <= ctx.now:
-            return [SendText(to=phone, text=STALE_TAP_TEXT), _main_menu(phone, ctx)]
-        if extract_phone(getattr(ev, "description", "")) != normalize_phone(phone):
+        ev = _get_owned_future_event(ctx, phone, payload.get("evt"))
+        if ev is None:
             return [SendText(to=phone, text=STALE_TAP_TEXT), _main_menu(phone, ctx)]
 
         svc_name = _event_service_name(ev)

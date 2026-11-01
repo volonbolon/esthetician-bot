@@ -164,7 +164,7 @@ class Engine:
         except ValueError:
             return False
         return payload.kind not in ("menu", "talk", "vip_noslot") and not (
-            payload.kind == "svc" and not payload.get("svc")
+            payload.kind == "svc" and not payload.get("svc") and not payload.get("resched")
         )
 
     def _is_confirm_tap(self, incoming: Incoming) -> bool:

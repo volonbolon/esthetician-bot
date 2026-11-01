@@ -256,18 +256,21 @@ class Simulator:
 
         if sub == "move":
             # Supports:
-            # /cal move <id> <new_start> [new_end]
-            # /cal move <cal> <id> <new_start> [new_end]
-            if tokens[1].lower() in ("available", "avail", "turnos", "turno"):
-                cal_id = self._resolve_cal_id(tokens[1])
-                ev_id = tokens[2]
-                new_start = tokens[3]
-                new_end = tokens[4] if len(tokens) > 4 else None
+            # /cal move <id> <new_start> [new_end] [| <description>]
+            # /cal move <cal> <id> <new_start> [new_end] [| <description>]
+            head, sep, desc_part = rest.partition("|")
+            new_desc = desc_part.strip() if sep else None
+            move_tokens = head.split()
+            if move_tokens[1].lower() in ("available", "avail", "turnos", "turno"):
+                cal_id = self._resolve_cal_id(move_tokens[1])
+                ev_id = move_tokens[2]
+                new_start = move_tokens[3]
+                new_end = move_tokens[4] if len(move_tokens) > 4 else None
             else:
-                ev_id = tokens[1]
+                ev_id = move_tokens[1]
                 cal_id = self._find_event_cal(ev_id)
-                new_start = tokens[2]
-                new_end = tokens[3] if len(tokens) > 3 else None
+                new_start = move_tokens[2]
+                new_end = move_tokens[3] if len(move_tokens) > 3 else None
 
             if new_end is None:
                 existing = await self.calendar.get_event(cal_id, ev_id)
@@ -276,11 +279,11 @@ class Simulator:
                 duration = existing.end - existing.start
                 new_end_dt = _to_tz(new_start) + duration
                 ev = await self.calendar.patch_event(
-                    cal_id, ev_id, start=new_start, end=new_end_dt
+                    cal_id, ev_id, start=new_start, end=new_end_dt, description=new_desc
                 )
             else:
                 ev = await self.calendar.patch_event(
-                    cal_id, ev_id, start=new_start, end=new_end
+                    cal_id, ev_id, start=new_start, end=new_end, description=new_desc
                 )
             self._print(
                 f"[cal] moved {ev.id}: "

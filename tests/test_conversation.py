@@ -765,3 +765,54 @@ def test_mi_turno_with_reprogramar_and_cancelar_buttons():
     assert cancel_tap[0] == Cancel(phone=PHONE, event_id="evt_99")
     assert isinstance(cancel_tap[1], SendText)
     assert isinstance(cancel_tap[2], AlertAdmin)
+
+
+def test_ownership_check_on_every_event_referencing_tap():
+    ev = CalendarEvent(
+        id="evt_owned",
+        start="2026-10-29T10:00",
+        end="2026-10-29T11:00",
+        title="Limpieza facial – Ana",
+        description=PHONE,
+    )
+    ctx = _ctx(now="2026-10-26T09:00", turnos=[ev])
+    intruder = ClientState(phone=OTHER_PHONE, name="Intrusa")
+
+    event_payloads = [
+        encode("cancel", evt="evt_owned"),
+        encode("resched", evt="evt_owned"),
+        encode("rem:confirm", evt="evt_owned"),
+        encode("rem:resched", evt="evt_owned"),
+        encode("rem:cancel", evt="evt_owned"),
+        encode("svc", resched="evt_owned"),
+        encode("svc", svc="Limpieza facial", resched="evt_owned"),
+        encode("day", svc="Limpieza facial", d="2026-10-27", resched="evt_owned"),
+        encode("more", step="day", svc="Limpieza facial", off=0, resched="evt_owned"),
+        encode(
+            "more",
+            step="slot",
+            svc="Limpieza facial",
+            d="2026-10-27",
+            off=0,
+            resched="evt_owned",
+        ),
+        encode("slot", svc="Limpieza facial", t="2026-10-27T09:00", resched="evt_owned"),
+        encode("confirm", svc="Limpieza facial", t="2026-10-27T09:00", resched="evt_owned"),
+    ]
+
+    for idx, pid in enumerate(event_payloads):
+        actions = handle(
+            intruder,
+            Incoming(
+                wamid=f"own_{idx}",
+                from_phone=OTHER_PHONE,
+                kind="button_reply",
+                payload_id=pid,
+            ),
+            ctx,
+        )
+        assert actions[0] == SendText(to=OTHER_PHONE, text=STALE_TAP_TEXT)
+        assert isinstance(actions[1], SendButtons)
+        assert not any(
+            isinstance(a, (Book, Reschedule, Cancel, ConfirmEvent)) for a in actions
+        )

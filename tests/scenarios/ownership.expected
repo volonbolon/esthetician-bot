@@ -1,0 +1,62 @@
+> hola
+[+5491100000001] Hola! Guardamos tu número y nombre únicamente para gestionar tus turnos. ¿Cómo es tu nombre?
+> Ana
+[+5491100000001] ¿En qué te puedo ayudar?
+  1. [Reservar]
+  2. [Mi turno]
+  3. [Hablar con Lorena]
+> 1
+[+5491100000001] Elegí un servicio: (Servicios)
+  -- Servicios --
+  1. Limpieza facial — 60 min
+  2. Peeling — 45 min
+  3. Dermaplaning — 60 min
+> 1
+[+5491100000001] Elegí un día para Limpieza facial: (Ver días)
+  -- Días disponibles --
+  1. Mar 27/10
+  2. Mié 28/10
+  3. Jue 29/10
+> 3
+[+5491100000001] Elegí un horario para Limpieza facial: (Ver horarios)
+  -- Horarios --
+  1. 10:00
+  2. 10:15
+  3. 10:30
+  4. 10:45
+  5. 11:00
+  6. 11:15
+  7. 11:30
+  8. 11:45
+  9. 12:00
+  10. Ver más
+> 1
+[+5491100000001] ¿Confirmás Limpieza facial el Jue 29/10 10:00?
+  1. [Confirmar]
+  2. [Cancelar]
+> 1
+[+5491100000001] Listo! Reservamos tu turno de Limpieza facial para el Jue 29/10 10:00.
+[TEMPLATE alerta_admin] (+5491100000099) Nuevo turno: Limpieza facial – Ana (+5491100000001) el Jue 29/10 10:00.
+> hola
+[+5491100000001] ¿En qué te puedo ayudar?
+  1. [Reservar]
+  2. [Mi turno]
+  3. [Hablar con Lorena]
+> 2
+[+5491100000001] Tu turno: Limpieza facial el Jue 29/10 10:00.
+  1. [Reprogramar]
+  2. [Cancelar]
+> 1
+[+5491100000001] Elegí un servicio: (Servicios)
+  -- Servicios --
+  1. Limpieza facial — 60 min
+  2. Peeling — 45 min
+  3. Dermaplaning — 60 min
+> /cal move evt_1 2026-10-29T10:00-03:00 | +5491199999999
+[cal] moved evt_1: 2026-10-29T10:00-03:00 -> 2026-10-29T11:00-03:00
+> 1
+[+5491100000001] Ese horario ya no está disponible.
+[+5491100000001] ¿En qué te puedo ayudar?
+  1. [Reservar]
+  2. [Mi turno]
+  3. [Hablar con Lorena]
