@@ -1,0 +1,214 @@
+> hola
+[+5491100000001] Hola! Guardamos tu número y nombre únicamente para gestionar tus turnos. ¿Cómo es tu nombre?
+> Ana
+[+5491100000001] ¿En qué te puedo ayudar?
+  1. [Reservar]
+  2. [Mi turno]
+  3. [Hablar con Lorena]
+> 1
+[+5491100000001] Elegí un servicio: (Servicios)
+  -- Servicios --
+  1. Limpieza facial — 60 min
+  2. Peeling — 45 min
+  3. Dermaplaning — 60 min
+> 1
+[+5491100000001] Elegí un día para Limpieza facial: (Ver días)
+  -- Días disponibles --
+  1. Sáb 19/12
+  2. Dom 20/12
+  3. Lun 21/12
+> 2
+[+5491100000001] Elegí un horario para Limpieza facial: (Ver horarios)
+  -- Horarios --
+  1. 09:00
+  2. 09:15
+  3. 09:30
+  4. 09:45
+  5. 10:00
+  6. 10:15
+  7. 10:30
+  8. 10:45
+  9. 11:00
+  10. Ver más
+> 1
+[+5491100000001] ¿Confirmás Limpieza facial el Dom 20/12 09:00?
+  1. [Confirmar]
+  2. [Cancelar]
+> 1
+[+5491100000001] Listo! Reservamos tu turno de Limpieza facial para el Dom 20/12 09:00.
+[TEMPLATE alerta_admin] (+5491100000099) Nuevo turno: Limpieza facial – Ana (+5491100000001) el Dom 20/12 09:00.
+> /tick
+[TEMPLATE recordatorio_turno] (+5491100000001) Ana | Limpieza facial | Dom 20/12 09:00
+  1. [Confirmar]
+  2. [Reprogramar]
+  3. [Cancelar]
+[sim] tick @ 2026-12-18T09:00-03:00 (reminders=1)
+> 1
+[+5491100000001] Gracias! Tu turno de Limpieza facial el Dom 20/12 09:00 quedó confirmado.
+> /cal
+[cal:available] (5)
+  avail_1: 2026-12-19T09:00-03:00 -> 2026-12-19T13:00-03:00 | Disponible
+  avail_2: 2026-12-19T15:00-03:00 -> 2026-12-19T18:00-03:00 | Disponible [VIP]
+  avail_3: 2026-12-20T09:00-03:00 -> 2026-12-20T13:00-03:00 | Disponible
+  avail_4: 2026-12-21T10:00-03:00 -> 2026-12-21T14:00-03:00 | Disponible
+  avail_5: 2027-01-04T10:00-03:00 -> 2027-01-04T13:00-03:00 | Disponible [VIP]
+[cal:turnos] (1)
+  evt_1: 2026-12-20T09:00-03:00 -> 2026-12-20T10:00-03:00 | ✅ Limpieza facial – Ana | +5491100000001
+> /phone +5491100000003
+[sim] phone -> +5491100000003
+> hola
+[+5491100000003] Hola! Guardamos tu número y nombre únicamente para gestionar tus turnos. ¿Cómo es tu nombre?
+> Carla
+[+5491100000003] ¿En qué te puedo ayudar?
+  1. [Reservar]
+  2. [Mi turno]
+  3. [Hablar con Lorena]
+> 1
+[+5491100000003] Elegí un servicio: (Servicios)
+  -- Servicios --
+  1. Limpieza facial — 60 min
+  2. Peeling — 45 min
+  3. Dermaplaning — 60 min
+> 2
+[+5491100000003] Elegí un día para Peeling: (Ver días)
+  -- Días disponibles --
+  1. Sáb 19/12
+  2. Dom 20/12
+  3. Lun 21/12
+> 2
+[+5491100000003] Elegí un horario para Peeling: (Ver horarios)
+  -- Horarios --
+  1. 10:00
+  2. 10:15
+  3. 10:30
+  4. 10:45
+  5. 11:00
+  6. 11:15
+  7. 11:30
+  8. 11:45
+  9. 12:00
+  10. Ver más
+> 1
+[+5491100000003] ¿Confirmás Peeling el Dom 20/12 10:00?
+  1. [Confirmar]
+  2. [Cancelar]
+> 1
+[+5491100000003] Listo! Reservamos tu turno de Peeling para el Dom 20/12 10:00.
+[TEMPLATE alerta_admin] (+5491100000099) Nuevo turno: Peeling – Carla (+5491100000003) el Dom 20/12 10:00.
+> /time 2026-12-18T10:00
+[sim] time -> 2026-12-18T10:00-03:00
+> /tick
+[TEMPLATE recordatorio_turno] (+5491100000003) Carla | Peeling | Dom 20/12 10:00
+  1. [Confirmar]
+  2. [Reprogramar]
+  3. [Cancelar]
+[sim] tick @ 2026-12-18T10:00-03:00 (reminders=1)
+> /phone +5491100000002
+[sim] phone -> +5491100000002
+> hola
+[+5491100000002] Hola! Guardamos tu número y nombre únicamente para gestionar tus turnos. ¿Cómo es tu nombre?
+> Bea
+[+5491100000002] ¿En qué te puedo ayudar?
+  1. [Reservar]
+  2. [Mi turno]
+  3. [Hablar con Lorena]
+> 1
+[+5491100000002] Elegí un servicio: (Servicios)
+  -- Servicios --
+  1. Limpieza facial — 60 min
+  2. Peeling — 45 min
+  3. Dermaplaning — 60 min
+> 2
+[+5491100000002] Elegí un día para Peeling: (Ver días)
+  -- Días disponibles --
+  1. Sáb 19/12
+  2. Dom 20/12
+  3. Lun 21/12
+> 3
+[+5491100000002] Elegí un horario para Peeling: (Ver horarios)
+  -- Horarios --
+  1. 10:00
+  2. 10:15
+  3. 10:30
+  4. 10:45
+  5. 11:00
+  6. 11:15
+  7. 11:30
+  8. 11:45
+  9. 12:00
+  10. Ver más
+> 1
+[+5491100000002] ¿Confirmás Peeling el Lun 21/12 10:00?
+  1. [Confirmar]
+  2. [Cancelar]
+> 1
+[+5491100000002] Listo! Reservamos tu turno de Peeling para el Lun 21/12 10:00.
+[TEMPLATE alerta_admin] (+5491100000099) Nuevo turno: Peeling – Bea (+5491100000002) el Lun 21/12 10:00.
+> /time 2026-12-19T10:00
+[sim] time -> 2026-12-19T10:00-03:00
+> /tick
+[TEMPLATE recordatorio_turno] (+5491100000002) Bea | Peeling | Lun 21/12 10:00
+  1. [Confirmar]
+  2. [Reprogramar]
+  3. [Cancelar]
+[sim] tick @ 2026-12-19T10:00-03:00 (reminders=1)
+> 2
+[+5491100000002] Elegí un servicio: (Servicios)
+  -- Servicios --
+  1. Limpieza facial — 60 min
+  2. Peeling — 45 min
+  3. Dermaplaning — 60 min
+> 2
+[+5491100000002] Elegí un día para Peeling: (Ver días)
+  -- Días disponibles --
+  1. Sáb 19/12
+  2. Dom 20/12
+  3. Lun 21/12
+> 3
+[+5491100000002] Elegí un horario para Peeling: (Ver horarios)
+  -- Horarios --
+  1. 10:00
+  2. 10:15
+  3. 10:30
+  4. 10:45
+  5. 11:00
+  6. 11:15
+  7. 11:30
+  8. 11:45
+  9. 12:00
+  10. Ver más
+> 9
+[+5491100000002] ¿Confirmás Peeling el Lun 21/12 12:00?
+  1. [Confirmar]
+  2. [Cancelar]
+> 1
+[+5491100000002] Listo! Reprogramamos tu turno de Peeling para el Lun 21/12 12:00.
+[TEMPLATE alerta_admin] (+5491100000099) Turno reprogramado: Peeling – Bea (+5491100000002) para Lun 21/12 12:00.
+> /time 2026-12-19T12:00
+[sim] time -> 2026-12-19T12:00-03:00
+> /phone +5491100000003
+[sim] phone -> +5491100000003
+> 3
+[+5491100000003] Faltan menos de 24h para tu turno. Por favor hablá directamente con Lorena para cancelar.
+[TEMPLATE alerta_admin] (+5491100000099) Carla (+5491100000003) intentó cancelar su turno de Peeling del Dom 20/12 10:00 con menos de 24h.
+> /phone +5491100000002
+[sim] phone -> +5491100000002
+> /tick
+[TEMPLATE recordatorio_turno] (+5491100000002) Bea | Peeling | Lun 21/12 12:00
+  1. [Confirmar]
+  2. [Reprogramar]
+  3. [Cancelar]
+[sim] tick @ 2026-12-19T12:00-03:00 (reminders=1)
+> 3
+[+5491100000002] Tu turno de Peeling del Lun 21/12 12:00 fue cancelado.
+[TEMPLATE alerta_admin] (+5491100000099) Turno cancelado: Peeling – Bea (+5491100000002) del Lun 21/12 12:00.
+> /cal
+[cal:available] (5)
+  avail_1: 2026-12-19T09:00-03:00 -> 2026-12-19T13:00-03:00 | Disponible
+  avail_2: 2026-12-19T15:00-03:00 -> 2026-12-19T18:00-03:00 | Disponible [VIP]
+  avail_3: 2026-12-20T09:00-03:00 -> 2026-12-20T13:00-03:00 | Disponible
+  avail_4: 2026-12-21T10:00-03:00 -> 2026-12-21T14:00-03:00 | Disponible
+  avail_5: 2027-01-04T10:00-03:00 -> 2027-01-04T13:00-03:00 | Disponible [VIP]
+[cal:turnos] (2)
+  evt_1: 2026-12-20T09:00-03:00 -> 2026-12-20T10:00-03:00 | ✅ Limpieza facial – Ana | +5491100000001
+  evt_2: 2026-12-20T10:00-03:00 -> 2026-12-20T10:45-03:00 | Peeling – Carla | +5491100000003

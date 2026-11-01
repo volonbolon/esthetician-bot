@@ -1,0 +1,57 @@
+# 1. Ana books Limpieza facial on Dom 20/12 09:00 (48h ahead of 2026-12-18 09:00)
+hola
+Ana
+1
+1
+2
+1
+1
+
+# 2. /tick at 2026-12-18 09:00 sends 48h reminder to Ana; she taps 1 (Confirmar -> ✅ prefix)
+/tick
+1
+/cal
+
+# 3. Carla books Peeling on Dom 20/12 10:00; /time 2026-12-18 10:00 + /tick sends her reminder
+/phone +5491100000003
+hola
+Carla
+1
+2
+2
+1
+1
+/time 2026-12-18T10:00
+/tick
+
+# 4. Bea books Peeling on Lun 21/12 10:00
+/phone +5491100000002
+hola
+Bea
+1
+2
+3
+1
+1
+
+# 5. Advance to 2026-12-19 10:00 -> /tick sends reminder to Bea; she taps 2 (Reprogramar) -> Lun 21/12 12:00
+/time 2026-12-19T10:00
+/tick
+2
+2
+3
+9
+1
+
+# 6. Advance to 2026-12-19 12:00:
+# - Carla's Dom 20/12 10:00 turno is now inside 24h cutoff -> she taps 3 (Cancelar on reminder) -> refused + alert
+/time 2026-12-19T12:00
+/phone +5491100000003
+3
+
+# 7. At 2026-12-19 12:00, /tick sends reminder for Bea's rescheduled Lun 21/12 12:00 turno;
+# Bea taps 3 (Cancelar on reminder outside 24h cutoff) -> cancelled + alert
+/phone +5491100000002
+/tick
+3
+/cal

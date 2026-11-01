@@ -332,3 +332,131 @@ async def test_sync_poller_upserts_cache_and_reminders_and_drops_vanished():
     assert engine.db.execute("SELECT * FROM reminders").fetchall() == []
 
 
+@pytest.mark.asyncio
+async def test_reminder_buttons_confirm_resched_cancel_and_cutoff():
+    engine, messenger, calendar, clock = _make_setup()
+    await calendar.create_event(
+        "available",
+        "2026-12-20T09:00",
+        "2026-12-20T12:00",
+        "Disponible",
+    )
+    await calendar.create_event(
+        "available",
+        "2026-12-21T10:00",
+        "2026-12-21T13:00",
+        "Disponible",
+    )
+
+    # Onboard Ana and book Lun 21/12 10:00
+    engine.db.execute(
+        "INSERT INTO clients(phone, name, awaiting_name, created_at) VALUES (?, ?, 0, ?)",
+        (CLIENT, "Ana", "2026-12-18T09:00:00-03:00"),
+    )
+    engine.db.commit()
+    ev = await calendar.create_event(
+        "turnos",
+        "2026-12-21T10:00",
+        "2026-12-21T11:00",
+        "Limpieza facial – Ana",
+        CLIENT,
+    )
+    await jobs.run_sync(engine, clock.now())
+
+    # 1. Advance to 48h before (2026-12-19T10:00) and send reminder
+    clock.set("2026-12-19T10:00:00")
+    assert await jobs.run_reminders(engine) == 1
+    rem_msg = messenger.last_message(CLIENT)
+    assert rem_msg is not None
+    btn_confirm, btn_resched, btn_cancel = rem_msg.buttons
+
+    # 2. Tap Confirmar -> ✅ prefix added to event title (idempotent on second tap)
+    await engine.handle_incoming(
+        Incoming(
+            wamid="rem_c1",
+            from_phone=CLIENT,
+            kind="template_button",
+            payload_id=btn_confirm.id,
+        )
+    )
+    ev_after = await calendar.get_event("turnos", ev.id)
+    assert ev_after is not None and ev_after.title == "✅ Limpieza facial – Ana"
+    assert (
+        messenger.last_message(CLIENT).text
+        == "Gracias! Tu turno de Limpieza facial el Lun 21/12 10:00 quedó confirmado."
+    )
+
+    await engine.handle_incoming(
+        Incoming(
+            wamid="rem_c2",
+            from_phone=CLIENT,
+            kind="template_button",
+            payload_id=btn_confirm.id,
+        )
+    )
+    ev_after2 = await calendar.get_event("turnos", ev.id)
+    assert ev_after2 is not None and ev_after2.title == "✅ Limpieza facial – Ana"
+
+    # 3. Tap Reprogramar outside 24h cutoff -> opens service list carrying resched=ev.id
+    await engine.handle_incoming(
+        Incoming(
+            wamid="rem_r1",
+            from_phone=CLIENT,
+            kind="template_button",
+            payload_id=btn_resched.id,
+        )
+    )
+    svc_msg = messenger.last_message(CLIENT)
+    assert svc_msg is not None and svc_msg.kind == "list"
+    assert f"resched={ev.id}" in svc_msg.rows[0].id
+
+    # 4. Inside 24h cutoff (2026-12-20T12:00 -> 22h before Lun 21/12 10:00):
+    # Reprogramar and Cancelar both refuse and alert admin without deleting the event
+    clock.set("2026-12-20T12:00:00")
+    await engine.handle_incoming(
+        Incoming(
+            wamid="rem_r_cut",
+            from_phone=CLIENT,
+            kind="template_button",
+            payload_id=btn_resched.id,
+        )
+    )
+    assert (
+        messenger.last_message(CLIENT).text
+        == "Faltan menos de 24h para tu turno. Por favor hablá directamente con Lorena para reprogramar."
+    )
+    assert "intentó reprogramar" in messenger.last_message(ADMIN).template_params[0]
+
+    await engine.handle_incoming(
+        Incoming(
+            wamid="rem_x_cut",
+            from_phone=CLIENT,
+            kind="template_button",
+            payload_id=btn_cancel.id,
+        )
+    )
+    assert (
+        messenger.last_message(CLIENT).text
+        == "Faltan menos de 24h para tu turno. Por favor hablá directamente con Lorena para cancelar."
+    )
+    assert "intentó cancelar" in messenger.last_message(ADMIN).template_params[0]
+    assert await calendar.get_event("turnos", ev.id) is not None
+
+    # 5. Outside 24h cutoff -> Cancelar deletes event and alerts admin
+    clock.set("2026-12-19T12:00:00")
+    await engine.handle_incoming(
+        Incoming(
+            wamid="rem_x_ok",
+            from_phone=CLIENT,
+            kind="template_button",
+            payload_id=btn_cancel.id,
+        )
+    )
+    assert (
+        messenger.last_message(CLIENT).text
+        == "Tu turno de Limpieza facial del Lun 21/12 10:00 fue cancelado."
+    )
+    assert await calendar.get_event("turnos", ev.id) is None
+
+
+

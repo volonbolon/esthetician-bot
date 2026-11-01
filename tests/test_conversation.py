@@ -653,49 +653,58 @@ def test_reschedule_and_reminder_confirm():
         ),
         ctx,
     )
-    assert rem_actions[0] == ConfirmEvent(phone=PHONE, event_id="evt1")
-    assert isinstance(rem_actions[1], SendText)
-
-    # Starting reschedule outside 24h cutoff -> service picker carrying resched="evt1"
-    start_resched = handle(
-        _client(),
-        Incoming(
-            wamid="w20b",
-            from_phone=PHONE,
-            kind="button_reply",
-            payload_id=encode("resched", evt="evt1"),
-        ),
-        ctx,
-    )
-    assert isinstance(start_resched[0], SendList)
-    assert decode(start_resched[0].rows[0].id).get("resched") == "evt1"
-
-    # Starting reschedule inside 24h cutoff -> contact her + alert, no reschedule
-    inside_resched = handle(
-        _client(),
-        Incoming(
-            wamid="w20c",
-            from_phone=PHONE,
-            kind="button_reply",
-            payload_id=encode("resched", evt="evt1"),
-        ),
-        _ctx(now="2026-10-28T12:00", turnos=[ev]),
-    )
-    assert inside_resched == [
+    assert rem_actions == [
+        ConfirmEvent(phone=PHONE, event_id="evt1"),
         SendText(
             to=PHONE,
-            text=(
-                "Faltan menos de 24h para tu turno. "
-                "Por favor hablá directamente con Lorena para reprogramar."
-            ),
-        ),
-        AlertAdmin(
-            text=(
-                f"Ana ({PHONE}) intentó reprogramar su turno de Limpieza facial "
-                "del Jue 29/10 10:00 con menos de 24h."
-            )
+            text="Gracias! Tu turno de Limpieza facial el Jue 29/10 10:00 quedó confirmado.",
         ),
     ]
+
+    # Starting reschedule outside 24h cutoff (both Mi turno `resched` and reminder `rem:resched`)
+    # -> service picker carrying resched="evt1"
+    for idx, kind in enumerate(("resched", "rem:resched")):
+        start_resched = handle(
+            _client(),
+            Incoming(
+                wamid=f"w20b_{idx}",
+                from_phone=PHONE,
+                kind="button_reply",
+                payload_id=encode(kind, evt="evt1"),
+            ),
+            ctx,
+        )
+        assert isinstance(start_resched[0], SendList)
+        assert decode(start_resched[0].rows[0].id).get("resched") == "evt1"
+
+    # Starting reschedule inside 24h cutoff (both `resched` and `rem:resched`)
+    # -> contact her + alert, no reschedule
+    for idx, kind in enumerate(("resched", "rem:resched")):
+        inside_resched = handle(
+            _client(),
+            Incoming(
+                wamid=f"w20c_{idx}",
+                from_phone=PHONE,
+                kind="button_reply",
+                payload_id=encode(kind, evt="evt1"),
+            ),
+            _ctx(now="2026-10-28T12:00", turnos=[ev]),
+        )
+        assert inside_resched == [
+            SendText(
+                to=PHONE,
+                text=(
+                    "Faltan menos de 24h para tu turno. "
+                    "Por favor hablá directamente con Lorena para reprogramar."
+                ),
+            ),
+            AlertAdmin(
+                text=(
+                    f"Ana ({PHONE}) intentó reprogramar su turno de Limpieza facial "
+                    "del Jue 29/10 10:00 con menos de 24h."
+                )
+            ),
+        ]
 
     # Reschedule confirm excludes old event from one-active rule and busy intervals,
     # emits Reschedule -> SendText -> AlertAdmin
