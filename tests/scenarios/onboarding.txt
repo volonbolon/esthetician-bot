@@ -1,0 +1,4 @@
+# Onboarding and main menu smoke scenario
+hola
+Ana
+/db

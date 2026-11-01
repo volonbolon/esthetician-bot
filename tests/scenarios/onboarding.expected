@@ -1,0 +1,12 @@
+> hola
+[+5491100000001] Hola! Guardamos tu número y nombre únicamente para gestionar tus turnos. ¿Cómo es tu nombre?
+> Ana
+[+5491100000001] ¿En qué te puedo ayudar?
+  1. [Reservar]
+  2. [Mi turno]
+  3. [Hablar con Valeria]
+> /db
+[db:clients] (1)
+  +5491100000001: name='Ana' vip=False muted_until=None awaiting_name=False
+[db:reminders] (0)
+[db:mutes] (0)

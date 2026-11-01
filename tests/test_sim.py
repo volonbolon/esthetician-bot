@@ -8,7 +8,9 @@ from app.adapters.fake_calendar import FakeCalendar
 from app.clock import FakeClock
 from app.conversation import Incoming
 from app.payloads import decode
-from app.sim import Simulator, _async_main
+from app.sim import Simulator, _async_main, _expected_path_for, run_script
+
+SCENARIOS_DIR = Path(__file__).resolve().parent / "scenarios"
 
 
 @pytest.mark.asyncio
@@ -157,3 +159,41 @@ async def test_simulator_cli_main_with_stdin(
     captured = capsys.readouterr().out
     assert "Camila" in captured
     assert db_file.exists()
+
+
+@pytest.mark.asyncio
+async def test_script_replay_and_golden_diff(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+):
+    script_file = tmp_path / "sample.txt"
+    expected_file = tmp_path / "sample.expected"
+    script_file.write_text("hola\nAna\n", encoding="utf-8")
+    actual = await run_script(script_file)
+    expected_file.write_text(actual, encoding="utf-8")
+
+    # Matching expected file -> exit code 0
+    rc_ok = await _async_main(["--script", str(script_file)])
+    assert rc_ok == 0
+
+    # Mismatching expected file -> exit code 1 + unified diff on stderr
+    expected_file.write_text("> hola\nWRONG\n", encoding="utf-8")
+    capsys.readouterr()
+    rc_fail = await _async_main(["--script", str(script_file)])
+    assert rc_fail == 1
+    err = capsys.readouterr().err
+    assert "---" in err
+    assert "+++" in err
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "script_path",
+    sorted(SCENARIOS_DIR.glob("*.txt")),
+    ids=lambda p: p.stem,
+)
+async def test_golden_scenarios(script_path: Path):
+    exp_path = _expected_path_for(script_path)
+    assert exp_path is not None, f"Missing expected file for {script_path}"
+    actual = await run_script(script_path)
+    expected = exp_path.read_text(encoding="utf-8")
+    assert actual == expected

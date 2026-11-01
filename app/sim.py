@@ -1,6 +1,7 @@
 import argparse
 import asyncio
 import difflib
+import io
 import re
 import sys
 from collections.abc import Sequence
@@ -366,16 +367,27 @@ async def run_script(
     now: datetime | str = DEFAULT_SIM_TIME,
     seed_path: str | Path | None = DEFAULT_SEED_PATH,
     stream: TextIO | None = None,
+    config: Config | None = None,
 ) -> str:
-    import io
-
     buf = io.StringIO()
+    cfg = (
+        config
+        if config is not None
+        else Config(
+            messenger="console",
+            calendar_backend="fake",
+            db_path=":memory:",
+            esthetician_name="Valeria",
+            admin_phones=(DEFAULT_ADMIN_PHONE,),
+        )
+    )
     sim = Simulator(
         phone=phone,
         db_path=":memory:",
         now=now,
         seed_path=seed_path,
         stream=buf,
+        config=cfg,
     )
     lines = Path(script_path).read_text(encoding="utf-8").splitlines()
     for raw in lines:
