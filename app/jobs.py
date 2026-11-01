@@ -9,7 +9,7 @@ from app.ports import CalendarError
 from app.reminders import REMINDER_LEAD_H, compute_send_at
 
 
-async def run_reminders(engine: Engine, now: datetime | None = None) -> int:
+async def run_reminders(engine: Engine, now: datetime | str | None = None) -> int:
     now_dt = _to_tz(now) if now is not None else engine.clock.now()
     rows = engine.db.execute(
         """
@@ -32,32 +32,28 @@ async def run_reminders(engine: Engine, now: datetime | None = None) -> int:
             )
             continue
 
-        if ev is None or ev.start <= now_dt:
+        if ev is None or _to_tz(ev.start) <= now_dt:
             engine.db.execute("DELETE FROM reminders WHERE event_id = ?", (event_id,))
             engine.db.execute("DELETE FROM appointments WHERE event_id = ?", (event_id,))
             engine.db.commit()
             continue
 
-        new_send_at = ev.start - timedelta(hours=REMINDER_LEAD_H)
+        ev_start = _to_tz(ev.start)
+        new_send_at = ev_start - timedelta(hours=REMINDER_LEAD_H)
         old_send_at = _to_tz(row["send_at"])
         if new_send_at != old_send_at:
             # Event was moved in Calendar; recompute send_at
             engine.db.execute(
                 "UPDATE appointments SET start_at = ? WHERE event_id = ?",
-                (ev.start.isoformat(), event_id),
+                (ev_start.isoformat(), event_id),
             )
-            if new_send_at > now_dt:
-                engine.db.execute(
-                    "UPDATE reminders SET send_at = ? WHERE event_id = ?",
-                    (new_send_at.isoformat(), event_id),
-                )
-                engine.db.commit()
-                continue
             engine.db.execute(
                 "UPDATE reminders SET send_at = ? WHERE event_id = ?",
                 (new_send_at.isoformat(), event_id),
             )
             engine.db.commit()
+            if new_send_at > now_dt:
+                continue
 
         phone = extract_phone(ev.description)
         if phone is None:
@@ -70,9 +66,14 @@ async def run_reminders(engine: Engine, now: datetime | None = None) -> int:
             engine.db.commit()
             continue
 
-        parsed = parse_title(ev.title)
-        svc_name = parsed[0] if parsed else ev.title
-        client_name = parsed[1] if parsed else "clienta"
+        try:
+            parsed = parse_title(ev.title)
+            svc_name = parsed.service
+            client_name = parsed.name
+        except ValueError:
+            svc_name = ev.title.strip() or "Turno"
+            client = engine._get_client(phone)
+            client_name = (client.name if client and client.name else None) or "clienta"
 
         buttons = (
             Button(id=encode("rem:confirm", evt=ev.id), title="Confirmar"),
@@ -82,7 +83,7 @@ async def run_reminders(engine: Engine, now: datetime | None = None) -> int:
         await engine.messenger.send_template(
             phone,
             "recordatorio_turno",
-            (client_name, svc_name, _format_dt(ev.start)),
+            (client_name, svc_name, _format_dt(ev_start)),
             buttons,
         )
         engine.db.execute(
@@ -95,7 +96,7 @@ async def run_reminders(engine: Engine, now: datetime | None = None) -> int:
     return sent_count
 
 
-async def run_sync(engine: Engine, now: datetime | None = None) -> None:
+async def run_sync(engine: Engine, now: datetime | str | None = None) -> int:
     now_dt = _to_tz(now) if now is not None else engine.clock.now()
     horizon_days = max(
         engine.services_cfg.horizon_regular, engine.services_cfg.horizon_vip
@@ -107,42 +108,40 @@ async def run_sync(engine: Engine, now: datetime | None = None) -> None:
 
     seen_ids: set[str] = set()
     for ev in events:
-        if ev.start <= now_dt:
+        ev_start = _to_tz(ev.start)
+        if ev_start <= now_dt:
             continue
         phone = extract_phone(ev.description)
         if phone is None:
             continue
         seen_ids.add(ev.id)
 
-        old_appt = engine.db.execute(
-            "SELECT start_at FROM appointments WHERE event_id = ?", (ev.id,)
-        ).fetchone()
-        old_start = _to_tz(old_appt["start_at"]) if old_appt else None
-
         engine.db.execute(
             "INSERT OR REPLACE INTO appointments (event_id, phone, start_at) VALUES (?, ?, ?)",
-            (ev.id, phone, ev.start.isoformat()),
+            (ev.id, phone, ev_start.isoformat()),
         )
 
         rem = engine.db.execute(
             "SELECT send_at, sent_at FROM reminders WHERE event_id = ?", (ev.id,)
         ).fetchone()
         if rem is None:
-            send_at = compute_send_at(ev.start, now_dt)
+            send_at = compute_send_at(ev_start, now_dt)
             if send_at is not None:
                 engine.db.execute(
                     "INSERT INTO reminders (event_id, send_at, sent_at) VALUES (?, ?, NULL)",
                     (ev.id, send_at.isoformat()),
                 )
-        elif rem["sent_at"] is None and old_start is not None and old_start != ev.start:
-            new_send_at = compute_send_at(ev.start, now_dt)
-            if new_send_at is not None:
-                engine.db.execute(
-                    "UPDATE reminders SET send_at = ? WHERE event_id = ?",
-                    (new_send_at.isoformat(), ev.id),
-                )
-            else:
-                engine.db.execute("DELETE FROM reminders WHERE event_id = ?", (ev.id,))
+        elif rem["sent_at"] is None:
+            expected_send_at = ev_start - timedelta(hours=REMINDER_LEAD_H)
+            if _to_tz(rem["send_at"]) != expected_send_at:
+                new_send_at = compute_send_at(ev_start, now_dt)
+                if new_send_at is not None:
+                    engine.db.execute(
+                        "UPDATE reminders SET send_at = ? WHERE event_id = ?",
+                        (new_send_at.isoformat(), ev.id),
+                    )
+                else:
+                    engine.db.execute("DELETE FROM reminders WHERE event_id = ?", (ev.id,))
 
     # Drop vanished future appointments and unsent reminders
     cached_rows = engine.db.execute(
@@ -153,7 +152,9 @@ async def run_sync(engine: Engine, now: datetime | None = None) -> None:
         start_at = _to_tz(row["start_at"])
         if start_at > now_dt and ev_id not in seen_ids:
             engine.db.execute("DELETE FROM appointments WHERE event_id = ?", (ev_id,))
-            engine.db.execute("DELETE FROM reminders WHERE event_id = ?", (ev_id,))
+            engine.db.execute(
+                "DELETE FROM reminders WHERE event_id = ? AND sent_at IS NULL", (ev_id,)
+            )
 
     rem_rows = engine.db.execute(
         "SELECT event_id FROM reminders WHERE sent_at IS NULL"
@@ -162,7 +163,12 @@ async def run_sync(engine: Engine, now: datetime | None = None) -> None:
         ev_id = row["event_id"]
         if ev_id not in seen_ids:
             ev_check = await engine.calendar.get_event(engine.config.cal_turnos_id, ev_id)
-            if ev_check is None or extract_phone(ev_check.description) is None:
+            if (
+                ev_check is None
+                or _to_tz(ev_check.start) <= now_dt
+                or extract_phone(ev_check.description) is None
+            ):
                 engine.db.execute("DELETE FROM reminders WHERE event_id = ?", (ev_id,))
 
     engine.db.commit()
+    return len(seen_ids)
