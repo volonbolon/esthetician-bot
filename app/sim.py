@@ -254,14 +254,33 @@ class Simulator:
             return
 
         if sub == "move":
-            # /cal move <event_id> <new_start> <new_end> OR /cal move <cal> <event_id> <new_start> <new_end>
-            if len(tokens) == 4:
-                ev_id, new_start, new_end = tokens[1], tokens[2], tokens[3]
-                cal_id = self._find_event_cal(ev_id)
-            else:
+            # Supports:
+            # /cal move <id> <new_start> [new_end]
+            # /cal move <cal> <id> <new_start> [new_end]
+            if tokens[1].lower() in ("available", "avail", "turnos", "turno"):
                 cal_id = self._resolve_cal_id(tokens[1])
-                ev_id, new_start, new_end = tokens[2], tokens[3], tokens[4]
-            ev = await self.calendar.patch_event(cal_id, ev_id, start=new_start, end=new_end)
+                ev_id = tokens[2]
+                new_start = tokens[3]
+                new_end = tokens[4] if len(tokens) > 4 else None
+            else:
+                ev_id = tokens[1]
+                cal_id = self._find_event_cal(ev_id)
+                new_start = tokens[2]
+                new_end = tokens[3] if len(tokens) > 3 else None
+
+            if new_end is None:
+                existing = await self.calendar.get_event(cal_id, ev_id)
+                if existing is None:
+                    raise ValueError(f"Event {ev_id!r} not found in {cal_id!r}")
+                duration = existing.end - existing.start
+                new_end_dt = _to_tz(new_start) + duration
+                ev = await self.calendar.patch_event(
+                    cal_id, ev_id, start=new_start, end=new_end_dt
+                )
+            else:
+                ev = await self.calendar.patch_event(
+                    cal_id, ev_id, start=new_start, end=new_end
+                )
             self._print(
                 f"[cal] moved {ev.id}: "
                 f"{ev.start.isoformat(timespec='minutes')} -> {ev.end.isoformat(timespec='minutes')}"
@@ -313,6 +332,11 @@ class Simulator:
         self._print(f"[db:reminders] ({len(rems)})")
         for r in rems:
             self._print(f"  {r['event_id']}: send_at={r['send_at']} sent_at={r['sent_at']}")
+
+        mutes = [c for c in clients if c["muted_until"]]
+        self._print(f"[db:mutes] ({len(mutes)})")
+        for m in mutes:
+            self._print(f"  {m['phone']}: muted_until={m['muted_until']}")
 
     def _reset(self) -> None:
         for table in (

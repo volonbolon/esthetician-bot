@@ -105,14 +105,28 @@ async def test_simulator_numeric_taps_and_slash_commands(tmp_path: Path):
     assert "[db:clients] (1)" in buf.getvalue()
     assert "[cal:turnos] (1)" in buf.getvalue()
 
-    # /time and /tick
-    await sim.handle_line("/time +2h")
+    # /time (+2d, +3h, explicit ISO) and /tick
+    await sim.handle_line("/time +2d")
+    assert "2026-10-28T09:00" in buf.getvalue()
+    await sim.handle_line("/time +3h")
+    assert "2026-10-28T12:00" in buf.getvalue()
+    await sim.handle_line("/time 2026-11-02T09:00")
     await sim.handle_line("/time")
-    assert "2026-10-26T11:00" in buf.getvalue()
+    assert "2026-11-02T09:00" in buf.getvalue()
     await sim.handle_line("/tick")
     assert "[sim] tick @" in buf.getvalue()
 
-    # /phone, /admin, /echo
+    # /cal add, move, delete
+    await sim.handle_line(
+        "/cal add turnos 2026-11-05T10:00 2026-11-05T11:00 Limpieza facial – Ana | +5491100000001"
+    )
+    assert "[cal] added evt_2" in buf.getvalue()
+    await sim.handle_line("/cal move evt_2 2026-11-05T12:00")
+    assert "[cal] moved evt_2: 2026-11-05T12:00-03:00 -> 2026-11-05T13:00-03:00" in buf.getvalue()
+    await sim.handle_line("/cal delete evt_2")
+    assert "[cal] deleted evt_2" in buf.getvalue()
+
+    # /phone, /admin, /echo, and /db mutes
     await sim.handle_line("/phone +5491122334455")
     assert sim.active_phone == "+5491122334455"
     await sim.handle_line("/admin")
@@ -121,6 +135,8 @@ async def test_simulator_numeric_taps_and_slash_commands(tmp_path: Path):
     assert "VIP activado" in buf.getvalue()
     await sim.handle_line("/echo +5491100000001 Hola Ana!")
     assert "[sim] echo -> +5491100000001: Hola Ana!" in buf.getvalue()
+    await sim.handle_line("/db")
+    assert "[db:mutes] (1)" in buf.getvalue()
 
     # /calfail and /reset
     await sim.handle_line("/calfail")
