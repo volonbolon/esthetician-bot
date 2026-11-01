@@ -1,0 +1,22 @@
+> /cal add turnos 2026-10-28T11:00 2026-10-28T11:45 Peeling – Ana | Anotado manual: 011 15 0000-0001
+[cal] added evt_1 in turnos: 2026-10-28T11:00-03:00 -> 2026-10-28T11:45-03:00 Peeling – Ana
+> hola
+[+5491100000001] Hola! Guardamos tu número y nombre únicamente para gestionar tus turnos. ¿Cómo es tu nombre?
+> Ana
+[+5491100000001] ¿En qué te puedo ayudar?
+  1. [Reservar]
+  2. [Mi turno]
+  3. [Hablar con Lorena]
+> 2
+[+5491100000001] Tu turno: Peeling el Mié 28/10 11:00.
+  1. [Reprogramar]
+  2. [Cancelar]
+> /cal
+[cal:available] (5)
+  avail_1: 2026-10-27T09:00-03:00 -> 2026-10-27T13:00-03:00 | Disponible
+  avail_2: 2026-10-27T15:00-03:00 -> 2026-10-27T18:00-03:00 | Disponible [VIP]
+  avail_3: 2026-10-28T09:00-03:00 -> 2026-10-28T13:00-03:00 | Disponible
+  avail_4: 2026-10-29T10:00-03:00 -> 2026-10-29T14:00-03:00 | Disponible
+  avail_5: 2026-11-12T10:00-03:00 -> 2026-11-12T13:00-03:00 | Disponible [VIP]
+[cal:turnos] (1)
+  evt_1: 2026-10-28T11:00-03:00 -> 2026-10-28T11:45-03:00 | Peeling – Ana | Anotado manual: 011 15 0000-0001

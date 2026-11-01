@@ -634,3 +634,60 @@ def test_vip_sees_no_encuentro_horario_row_and_rate_limits_alert():
     assert not any(isinstance(a, AlertAdmin) for a in throttled_actions)
     assert len(throttled_actions) == 1
     assert isinstance(throttled_actions[0], SendText)
+
+
+def test_active_appointment_lookup_by_normalized_phone_in_turnos_descriptions():
+    # Past event for same client (ignored), manual event with local phone format,
+    # later event for same client, and event with no phone / other phone.
+    turnos = [
+        CalendarEvent(
+            id="evt_past",
+            start="2026-10-26T08:00",
+            end="2026-10-26T09:00",
+            title="Limpieza facial – Ana",
+            description=PHONE,
+        ),
+        CalendarEvent(
+            id="evt_other",
+            start="2026-10-27T09:00",
+            end="2026-10-27T10:00",
+            title="Peeling – Otra",
+            description="Sin telefono",
+        ),
+        CalendarEvent(
+            id="evt_later",
+            start="2026-10-30T11:00",
+            end="2026-10-30T12:00",
+            title="Limpieza facial – Ana",
+            description="+54 11 2233-4455",
+        ),
+        CalendarEvent(
+            id="evt_manual",
+            start="2026-10-28T10:30",
+            end="2026-10-28T11:15",
+            title="Peeling – Ana",
+            description="Anotado manual: 011 15-2233-4455 (seña ok)",
+        ),
+    ]
+    ctx = _ctx(now="2026-10-26T09:00", turnos=turnos)
+
+    # Mi turno finds earliest future matching event (evt_manual) via normalized phone
+    mine_actions = handle(
+        _client(),
+        Incoming(wamid="w25", from_phone=PHONE, kind="button_reply", payload_id=encode("mine")),
+        ctx,
+    )
+    assert len(mine_actions) == 1
+    assert isinstance(mine_actions[0], SendButtons)
+    assert mine_actions[0].body == "Tu turno: Peeling el Mié 28/10 10:30."
+    assert mine_actions[0].buttons[0].id == encode("resched", evt="evt_manual")
+    assert mine_actions[0].buttons[1].id == encode("cancel", evt="evt_manual")
+
+    # Client with no matching future event sees "No tenés ningún turno agendado."
+    none_actions = handle(
+        ClientState(phone=OTHER_PHONE, name="Carla"),
+        Incoming(wamid="w26", from_phone=OTHER_PHONE, kind="button_reply", payload_id=encode("mine")),
+        ctx,
+    )
+    assert isinstance(none_actions[0], SendButtons)
+    assert none_actions[0].body == "No tenés ningún turno agendado."
