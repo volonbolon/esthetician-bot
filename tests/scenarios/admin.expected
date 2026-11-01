@@ -1,0 +1,40 @@
+> hola
+[+5491100000001] Hola! Guardamos tu número y nombre únicamente para gestionar tus turnos. ¿Cómo es tu nombre?
+> Ana
+[+5491100000001] ¿En qué te puedo ayudar?
+  1. [Reservar]
+  2. [Mi turno]
+  3. [Hablar con Lorena]
+> 3
+[TEMPLATE alerta_admin] (+5491100000099) Ana (+5491100000001) quiere hablar con vos.
+[+5491100000001] Le avisé a Lorena. Te va a responder por acá en breve.
+> /admin
+[sim] phone -> +5491100000099 (admin)
+> vips
+[+5491100000099] No hay clientas VIP registradas.
+> vip 011 15 0000-0001
+[+5491100000099] VIP activado para +5491100000001.
+> vip +5491122334455
+[+5491100000099] VIP activado para +5491122334455.
+> vips
+[+5491100000099] Clientas VIP:
+- Ana (+5491100000001)
+- +5491122334455
+> unvip +5491122334455
+[+5491100000099] VIP desactivado para +5491122334455.
+> vips
+[+5491100000099] Clientas VIP:
+- Ana (+5491100000001)
+> bot 011 15 0000-0001
+[+5491100000099] Bot reactivado para +5491100000001.
+> comando_desconocido
+[+5491100000099] Comandos disponibles: vip <tel>, unvip <tel>, vips, bot <tel>
+> vip invalido
+[+5491100000099] Comandos disponibles: vip <tel>, unvip <tel>, vips, bot <tel>
+> /phone +5491100000001
+[sim] phone -> +5491100000001
+> hola
+[+5491100000001] ¿En qué te puedo ayudar?
+  1. [Reservar]
+  2. [Mi turno]
+  3. [Hablar con Lorena]

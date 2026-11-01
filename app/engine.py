@@ -24,6 +24,7 @@ from app.conversation import (
     SendText,
     SetMute,
     SetName,
+    SetVip,
     handle,
 )
 from app.db import init_db
@@ -36,7 +37,6 @@ from app.reminders import compute_send_at
 RETRY_LATER_TEXT = (
     "Hubo un problema con la agenda. Por favor intentá de nuevo en unos minutos."
 )
-ADMIN_HELP_TEXT = "Comandos disponibles: vip <tel>, unvip <tel>, vips, bot <tel>"
 BOOKING_LOCK = asyncio.Lock()
 
 
@@ -104,53 +104,29 @@ class Engine:
             f"Error de Google Calendar atendiendo a {client_phone}: {exc}"
         )
 
+    def _get_vip_clients(self) -> tuple[ClientState, ...]:
+        rows = self.db.execute(
+            "SELECT phone, name FROM clients WHERE vip = 1 ORDER BY phone"
+        ).fetchall()
+        return tuple(
+            ClientState(phone=r["phone"], name=r["name"], vip=True) for r in rows
+        )
+
     async def _handle_admin_command(self, admin_phone: str, text: str) -> None:
-        parts = text.strip().split(maxsplit=1)
-        cmd = parts[0].lower() if parts else ""
-        arg = parts[1].strip() if len(parts) > 1 else ""
         now = self.clock.now()
-
-        if cmd == "vips" and not arg:
-            rows = self.db.execute(
-                "SELECT phone, name FROM clients WHERE vip = 1 ORDER BY phone"
-            ).fetchall()
-            if not rows:
-                await self.messenger.send_text(admin_phone, "No hay clientas VIP registradas.")
-                return
-            lines = [
-                f"- {r['name']} ({r['phone']})" if r["name"] else f"- {r['phone']}"
-                for r in rows
-            ]
-            await self.messenger.send_text(admin_phone, "Clientas VIP:\n" + "\n".join(lines))
-            return
-
-        if cmd in ("vip", "unvip", "bot") and arg:
-            try:
-                target = normalize_phone(arg)
-            except ValueError:
-                await self.messenger.send_text(admin_phone, ADMIN_HELP_TEXT)
-                return
-
-            self._ensure_client_row(target, now)
-            if cmd == "vip":
-                self.db.execute("UPDATE clients SET vip = 1 WHERE phone = ?", (target,))
-                self.db.commit()
-                await self.messenger.send_text(admin_phone, f"VIP activado para {target}.")
-                return
-            if cmd == "unvip":
-                self.db.execute("UPDATE clients SET vip = 0 WHERE phone = ?", (target,))
-                self.db.commit()
-                await self.messenger.send_text(admin_phone, f"VIP desactivado para {target}.")
-                return
-            if cmd == "bot":
-                self.db.execute(
-                    "UPDATE clients SET muted_until = NULL WHERE phone = ?", (target,)
-                )
-                self.db.commit()
-                await self.messenger.send_text(admin_phone, f"Bot reactivado para {target}.")
-                return
-
-        await self.messenger.send_text(admin_phone, ADMIN_HELP_TEXT)
+        ctx = ConversationContext(
+            now=now,
+            services_cfg=self.services_cfg,
+            esthetician_name=self.config.esthetician_name,
+            admin_phones=tuple(self._admin_phones),
+            vip_clients=self._get_vip_clients(),
+        )
+        actions = handle(
+            None,
+            Incoming(wamid="", from_phone=admin_phone, kind="text", text=text),
+            ctx,
+        )
+        await self.execute_actions(actions, now)
 
     def _needs_calendar(self, client: ClientState | None, incoming: Incoming) -> bool:
         if incoming.kind == "echo":
@@ -236,6 +212,13 @@ class Engine:
                 self.db.execute(
                     "UPDATE clients SET muted_until = ? WHERE phone = ?",
                     (act.muted_until.isoformat() if act.muted_until else None, act.phone),
+                )
+                self.db.commit()
+            elif isinstance(act, SetVip):
+                self._ensure_client_row(act.phone, now_dt)
+                self.db.execute(
+                    "UPDATE clients SET vip = ? WHERE phone = ?",
+                    (1 if act.vip else 0, act.phone),
                 )
                 self.db.commit()
             elif isinstance(act, Book):

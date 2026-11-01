@@ -1,0 +1,16 @@
+# Admin commands: vip, unvip, vips, bot; unknown -> help
+hola
+Ana
+3
+/admin
+vips
+vip 011 15 0000-0001
+vip +5491122334455
+vips
+unvip +5491122334455
+vips
+bot 011 15 0000-0001
+comando_desconocido
+vip invalido
+/phone +5491100000001
+hola

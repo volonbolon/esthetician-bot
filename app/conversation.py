@@ -22,6 +22,7 @@ DATA_NOTICE = (
     "¿Cómo es tu nombre?"
 )
 STALE_TAP_TEXT = "Ese horario ya no está disponible."
+ADMIN_HELP_TEXT = "Comandos disponibles: vip <tel>, unvip <tel>, vips, bot <tel>"
 
 
 @dataclass(frozen=True)
@@ -75,6 +76,8 @@ class ConversationContext:
     available_blocks: Sequence[Any] = ()
     turnos_events: Sequence[Any] = ()
     last_vip_alert_at: datetime | None = None
+    admin_phones: Sequence[str] = ()
+    vip_clients: Sequence[ClientState] = ()
 
     def __init__(
         self,
@@ -84,6 +87,8 @@ class ConversationContext:
         available_blocks: Sequence[Any] = (),
         turnos_events: Sequence[Any] = (),
         last_vip_alert_at: datetime | str | None = None,
+        admin_phones: Sequence[str] = (),
+        vip_clients: Sequence[ClientState] = (),
     ) -> None:
         object.__setattr__(self, "now", _to_tz(now))
         object.__setattr__(self, "services_cfg", services_cfg)
@@ -95,6 +100,12 @@ class ConversationContext:
             "last_vip_alert_at",
             _to_tz(last_vip_alert_at) if last_vip_alert_at is not None else None,
         )
+        object.__setattr__(
+            self,
+            "admin_phones",
+            tuple(normalize_phone(p) for p in admin_phones if p.strip()),
+        )
+        object.__setattr__(self, "vip_clients", tuple(vip_clients))
 
 
 @dataclass(frozen=True)
@@ -169,6 +180,12 @@ class SetName:
 
 
 @dataclass(frozen=True)
+class SetVip:
+    phone: str
+    vip: bool
+
+
+@dataclass(frozen=True)
 class Book:
     phone: str
     service: str
@@ -205,6 +222,7 @@ Action = (
     | AlertAdmin
     | SetMute
     | SetName
+    | SetVip
     | Book
     | Cancel
     | Reschedule
@@ -756,6 +774,45 @@ def _inside_cutoff_actions(
     ]
 
 
+def _handle_admin_command(
+    admin_phone: str, text: str, ctx: ConversationContext
+) -> list[Action]:
+    parts = text.strip().split(maxsplit=1)
+    cmd = parts[0].lower() if parts else ""
+    arg = parts[1].strip() if len(parts) > 1 else ""
+
+    if cmd == "vips" and not arg:
+        if not ctx.vip_clients:
+            return [SendText(to=admin_phone, text="No hay clientas VIP registradas.")]
+        lines = [
+            f"- {c.name} ({c.phone})" if c.name else f"- {c.phone}"
+            for c in sorted(ctx.vip_clients, key=lambda c: c.phone)
+        ]
+        return [SendText(to=admin_phone, text="Clientas VIP:\n" + "\n".join(lines))]
+
+    if cmd in ("vip", "unvip", "bot") and arg:
+        try:
+            target = normalize_phone(arg)
+        except ValueError:
+            return [SendText(to=admin_phone, text=ADMIN_HELP_TEXT)]
+        if cmd == "vip":
+            return [
+                SetVip(phone=target, vip=True),
+                SendText(to=admin_phone, text=f"VIP activado para {target}."),
+            ]
+        if cmd == "unvip":
+            return [
+                SetVip(phone=target, vip=False),
+                SendText(to=admin_phone, text=f"VIP desactivado para {target}."),
+            ]
+        return [
+            SetMute(phone=target, muted_until=None),
+            SendText(to=admin_phone, text=f"Bot reactivado para {target}."),
+        ]
+
+    return [SendText(to=admin_phone, text=ADMIN_HELP_TEXT)]
+
+
 def handle(
     client_state: ClientState | None,
     incoming: Incoming,
@@ -770,6 +827,9 @@ def handle(
         return [SetMute(phone=target_phone, muted_until=new_mute)]
 
     phone = normalize_phone(incoming.from_phone)
+
+    if phone in ctx.admin_phones and incoming.kind == "text":
+        return _handle_admin_command(phone, incoming.text, ctx)
 
     if client_state is None or (client_state.name is None and not client_state.awaiting_name):
         return [

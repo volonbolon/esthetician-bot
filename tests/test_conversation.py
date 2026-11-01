@@ -3,6 +3,7 @@ from datetime import datetime
 from app.clock import TZ
 from app.config import Service, ServicesConfig
 from app.conversation import (
+    ADMIN_HELP_TEXT,
     DATA_NOTICE,
     STALE_TAP_TEXT,
     AlertAdmin,
@@ -20,6 +21,7 @@ from app.conversation import (
     SendText,
     SetMute,
     SetName,
+    SetVip,
     handle,
 )
 from app.payloads import decode, encode
@@ -993,3 +995,89 @@ def test_ownership_check_on_every_event_referencing_tap():
         assert not any(
             isinstance(a, (Book, Reschedule, Cancel, ConfirmEvent)) for a in actions
         )
+
+
+def test_admin_commands_vip_unvip_vips_bot_and_unknown_help():
+    admin = "+5491100000099"
+    ctx_empty = ConversationContext(
+        now="2026-12-18T09:00",
+        services_cfg=_cfg(),
+        admin_phones=(admin,),
+        vip_clients=(),
+    )
+
+    # 1. vip <phone> (normalizes various local formats)
+    vip_actions = handle(
+        None,
+        Incoming(wamid="adm1", from_phone="011 15 0000-0099", kind="text", text="VIP 011 15 2233-4455"),
+        ctx_empty,
+    )
+    assert vip_actions == [
+        SetVip(phone=PHONE, vip=True),
+        SendText(to=admin, text=f"VIP activado para {PHONE}."),
+    ]
+
+    # 2. vips when empty vs populated (with and without client name, sorted by phone)
+    vips_empty = handle(
+        None,
+        Incoming(wamid="adm2", from_phone=admin, kind="text", text="vips"),
+        ctx_empty,
+    )
+    assert vips_empty == [
+        SendText(to=admin, text="No hay clientas VIP registradas.")
+    ]
+
+    ctx_with_vips = ConversationContext(
+        now="2026-12-18T09:00",
+        services_cfg=_cfg(),
+        admin_phones=(admin,),
+        vip_clients=(
+            ClientState(phone=OTHER_PHONE, name=None, vip=True),
+            ClientState(phone=PHONE, name="Ana", vip=True),
+        ),
+    )
+    vips_listed = handle(
+        None,
+        Incoming(wamid="adm3", from_phone=admin, kind="text", text="VIPS"),
+        ctx_with_vips,
+    )
+    assert vips_listed == [
+        SendText(
+            to=admin,
+            text=f"Clientas VIP:\n- Ana ({PHONE})\n- {OTHER_PHONE}",
+        )
+    ]
+
+    # 3. unvip <phone>
+    unvip_actions = handle(
+        None,
+        Incoming(wamid="adm4", from_phone=admin, kind="text", text=f"unvip {PHONE}"),
+        ctx_with_vips,
+    )
+    assert unvip_actions == [
+        SetVip(phone=PHONE, vip=False),
+        SendText(to=admin, text=f"VIP desactivado para {PHONE}."),
+    ]
+
+    # 4. bot <phone> (unmute)
+    bot_actions = handle(
+        None,
+        Incoming(wamid="adm5", from_phone=admin, kind="text", text="bot +54 9 11 2233-4455"),
+        ctx_empty,
+    )
+    assert bot_actions == [
+        SetMute(phone=PHONE, muted_until=None),
+        SendText(to=admin, text=f"Bot reactivado para {PHONE}."),
+    ]
+
+    # 5. Unknown commands, missing args, extra args on vips, invalid phones -> help
+    for bad_idx, bad_cmd in enumerate(
+        ["hola", "vip", "unvip", "bot", "vips extra", "vip no-es-telefono", ""],
+        start=10,
+    ):
+        help_actions = handle(
+            None,
+            Incoming(wamid=f"adm_{bad_idx}", from_phone=admin, kind="text", text=bad_cmd),
+            ctx_empty,
+        )
+        assert help_actions == [SendText(to=admin, text=ADMIN_HELP_TEXT)]
