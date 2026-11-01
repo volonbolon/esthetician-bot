@@ -1081,3 +1081,127 @@ def test_admin_commands_vip_unvip_vips_bot_and_unknown_help():
             ctx_empty,
         )
         assert help_actions == [SendText(to=admin, text=ADMIN_HELP_TEXT)]
+
+
+def test_stale_tap_anywhere_returns_stale_text_and_fresh_options():
+    client = _client()
+    # Day 2026-10-27 has been fully booked; 2026-10-28 has slots 10:00 and 10:30
+    ctx = _ctx(
+        now="2026-10-26T09:00",
+        blocks=[Block("2026-10-28T10:00", "2026-10-28T11:30", "Disponible")],
+        turnos=[],
+    )
+
+    # 1. Stale day tap (2026-10-27 no longer has any slots) -> STALE_TAP_TEXT + fresh day list
+    stale_day = handle(
+        client,
+        Incoming(
+            wamid="st1",
+            from_phone=PHONE,
+            kind="list_reply",
+            payload_id=encode("day", svc="Limpieza facial", d="2026-10-27"),
+        ),
+        ctx,
+    )
+    assert stale_day[0] == SendText(to=PHONE, text=STALE_TAP_TEXT)
+    assert isinstance(stale_day[1], SendList)
+    assert [r.title for r in stale_day[1].rows] == ["Mié 28/10"]
+
+    # 2. Stale "Ver más" on days (offset=9 now empty) -> STALE_TAP_TEXT + fresh day list (offset=0)
+    stale_more_days = handle(
+        client,
+        Incoming(
+            wamid="st2",
+            from_phone=PHONE,
+            kind="list_reply",
+            payload_id=encode("more", step="day", svc="Limpieza facial", off=9),
+        ),
+        ctx,
+    )
+    assert stale_more_days[0] == SendText(to=PHONE, text=STALE_TAP_TEXT)
+    assert isinstance(stale_more_days[1], SendList)
+    assert [r.title for r in stale_more_days[1].rows] == ["Mié 28/10"]
+
+    # 3. Stale "Ver más" on slots (offset=9 now empty, but day still has slots) -> STALE_TAP_TEXT + fresh time list
+    stale_more_slots = handle(
+        client,
+        Incoming(
+            wamid="st3",
+            from_phone=PHONE,
+            kind="list_reply",
+            payload_id=encode("more", step="slot", svc="Limpieza facial", d="2026-10-28", off=9),
+        ),
+        ctx,
+    )
+    assert stale_more_slots[0] == SendText(to=PHONE, text=STALE_TAP_TEXT)
+    assert isinstance(stale_more_slots[1], SendList)
+    assert [r.title for r in stale_more_slots[1].rows] == ["10:00", "10:30"]
+
+    # 4. Stale slot tap when day still has other slots -> STALE_TAP_TEXT + fresh time list for that day
+    stale_slot_same_day = handle(
+        client,
+        Incoming(
+            wamid="st4",
+            from_phone=PHONE,
+            kind="list_reply",
+            payload_id=encode("slot", svc="Limpieza facial", t="2026-10-28T09:00"),
+        ),
+        ctx,
+    )
+    assert stale_slot_same_day[0] == SendText(to=PHONE, text=STALE_TAP_TEXT)
+    assert isinstance(stale_slot_same_day[1], SendList)
+    assert [r.title for r in stale_slot_same_day[1].rows] == ["10:00", "10:30"]
+
+    # 5. Stale slot tap when that day has no slots left -> STALE_TAP_TEXT + fresh day list
+    stale_slot_no_day = handle(
+        client,
+        Incoming(
+            wamid="st5",
+            from_phone=PHONE,
+            kind="list_reply",
+            payload_id=encode("slot", svc="Limpieza facial", t="2026-10-27T09:00"),
+        ),
+        ctx,
+    )
+    assert stale_slot_no_day[0] == SendText(to=PHONE, text=STALE_TAP_TEXT)
+    assert isinstance(stale_slot_no_day[1], SendList)
+    assert [r.title for r in stale_slot_no_day[1].rows] == ["Mié 28/10"]
+
+    # 6. Stale confirm tap when day has no slots left -> STALE_TAP_TEXT + fresh day list
+    stale_confirm = handle(
+        client,
+        Incoming(
+            wamid="st6",
+            from_phone=PHONE,
+            kind="button_reply",
+            payload_id=encode("confirm", svc="Limpieza facial", t="2026-10-27T09:00"),
+        ),
+        ctx,
+    )
+    assert stale_confirm[0] == SendText(to=PHONE, text=STALE_TAP_TEXT)
+    assert isinstance(stale_confirm[1], SendList)
+    assert [r.title for r in stale_confirm[1].rows] == ["Mié 28/10"]
+
+    # 7. Stale event taps (deleted event, resched in progress on deleted event, vip_noslot after unvip, unknown svc, corrupt payload) -> STALE_TAP_TEXT + main menu
+    for idx, pid in enumerate(
+        [
+            encode("cancel", evt="evt_deleted"),
+            encode("resched", evt="evt_deleted"),
+            encode("rem:confirm", evt="evt_deleted"),
+            encode("rem:resched", evt="evt_deleted"),
+            encode("rem:cancel", evt="evt_deleted"),
+            encode("day", svc="Limpieza facial", d="2026-10-28", resched="evt_deleted"),
+            encode("vip_noslot", svc="Limpieza facial"),
+            encode("svc", svc="Servicio inexistente"),
+            "corrupt:payload",
+        ],
+        start=10,
+    ):
+        res = handle(
+            client,
+            Incoming(wamid=f"st_{idx}", from_phone=PHONE, kind="button_reply", payload_id=pid),
+            ctx,
+        )
+        assert res[0] == SendText(to=PHONE, text=STALE_TAP_TEXT)
+        assert isinstance(res[1], SendButtons)
+        assert res[1].body == "¿En qué te puedo ayudar?"

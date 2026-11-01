@@ -313,7 +313,10 @@ def _day_list_actions(
     page = paginate(days, offset=offset, vip=client.vip)
 
     if not page.items and offset > 0:
-        return [SendText(to=phone, text=STALE_TAP_TEXT), _main_menu(phone, ctx)]
+        return [
+            SendText(to=phone, text=STALE_TAP_TEXT),
+            *_day_list_actions(phone, client, ctx, svc_name, resched=resched),
+        ]
 
     if not page.items and not client.vip:
         return [
@@ -375,7 +378,7 @@ def _time_list_actions(
     if not page.items:
         return [
             SendText(to=phone, text=STALE_TAP_TEXT),
-            *_day_list_actions(phone, client, ctx, svc_name, resched=resched),
+            *_time_list_actions(phone, client, ctx, svc_name, day_str, resched=resched),
         ]
 
     rows: list[ListRow] = [

@@ -1,0 +1,16 @@
+# Stale tap anywhere -> "ese horario ya no está disponible" + fresh options
+hola
+Ana
+1
+1
+/cal delete avail_3
+2
+1
+/cal add turnos 2026-12-19T09:00 2026-12-19T10:00 Limpieza facial – Otra | +5491199998888
+1
+1
+1
+hola
+2
+/cal delete evt_2
+2
