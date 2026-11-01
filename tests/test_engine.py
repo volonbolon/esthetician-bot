@@ -4,12 +4,20 @@ import pytest
 
 from app.adapters.fake_calendar import FakeCalendar
 from app.adapters.fake_messenger import FakeMessenger
-from app.clock import FakeClock
+from app.clock import FakeClock, _to_tz
 from app.config import Config
-from app.conversation import Incoming
+from app.conversation import (
+    AlertAdmin,
+    Cancel,
+    ConfirmEvent,
+    Incoming,
+    Reschedule,
+    SendTemplate,
+)
 from app.db import init_db
 from app.engine import BOOKING_LOCK, RETRY_LATER_TEXT, Engine, build_app
 from app.payloads import encode
+from app.ports import CalendarError
 
 CLIENT_A = "+5491122334455"
 CLIENT_B = "+5491166778899"
@@ -121,6 +129,98 @@ async def test_calendar_error_tells_client_to_retry_and_alerts_admin_without_cla
     assert admin_msg is not None
     assert admin_msg.kind == "template"
     assert admin_msg.template_name == "alerta_admin"
+
+
+@pytest.mark.asyncio
+async def test_calendar_error_on_create_event_aborts_before_success_message():
+    engine, messenger, calendar, _ = _make_engine()
+    await calendar.create_event(
+        "available", "2026-10-29T09:00", "2026-10-29T12:00", "Disponible"
+    )
+
+    await engine.handle_incoming(Incoming(wamid="w1", from_phone=CLIENT_A, text="hola"))
+    await engine.handle_incoming(Incoming(wamid="w2", from_phone=CLIENT_A, text="Ana"))
+
+    async def failing_create_event(*args, **kwargs):
+        raise CalendarError("Failed to create event in Turnos")
+
+    calendar.create_event = failing_create_event  # type: ignore[method-assign]
+
+    await engine.handle_incoming(
+        Incoming(
+            wamid="w3",
+            from_phone=CLIENT_A,
+            kind="button_reply",
+            payload_id=encode("confirm", svc="Limpieza facial", t="2026-10-29T09:00"),
+        )
+    )
+
+    client_texts = [m.text for m in messenger.messages_for(CLIENT_A) if m.kind == "text"]
+    assert not any("Reservamos tu turno" in t for t in client_texts)
+    assert messenger.last_message(CLIENT_A).text == RETRY_LATER_TEXT
+    assert engine.db.execute("SELECT * FROM appointments").fetchone() is None
+    assert engine.db.execute("SELECT * FROM reminders").fetchone() is None
+    admin_msgs = messenger.messages_for(ADMIN)
+    assert len(admin_msgs) == 1
+    assert "Error de Google Calendar" in admin_msgs[0].template_params[0]
+
+
+@pytest.mark.asyncio
+async def test_execute_actions_reschedule_cancel_confirm_event_and_vip_alert():
+    engine, messenger, calendar, clock = _make_engine()
+    old_ev = await calendar.create_event(
+        "turnos",
+        "2026-10-29T09:00",
+        "2026-10-29T10:00",
+        "Limpieza facial – Ana",
+        CLIENT_A,
+    )
+    engine._save_appointment_and_reminder(
+        old_ev.id, CLIENT_A, _to_tz("2026-10-29T09:00"), clock.now()
+    )
+    engine.db.commit()
+
+    # 1. ConfirmEvent prefixes title with ✅
+    await engine.execute_actions([ConfirmEvent(phone=CLIENT_A, event_id=old_ev.id)])
+    updated_old = await calendar.get_event("turnos", old_ev.id)
+    assert updated_old is not None
+    assert updated_old.title.startswith("✅ ")
+
+    # 2. Reschedule creates new event, deletes old event, and updates DB rows
+    await engine.execute_actions(
+        [
+            Reschedule(
+                phone=CLIENT_A,
+                client_name="Ana",
+                service="Limpieza facial",
+                old_event_id=old_ev.id,
+                new_start=_to_tz("2026-10-30T11:00"),
+            ),
+            AlertAdmin(text="Reprogramado", vip_alert_phone=CLIENT_A),
+            SendTemplate(
+                to=CLIENT_A,
+                name="recordatorio_turno",
+                params=("Ana", "Limpieza facial", "viernes 30/10 11:00"),
+            ),
+        ]
+    )
+    assert await calendar.get_event("turnos", old_ev.id) is None
+    turnos = await calendar.list_events("turnos", "2026-10-30T00:00", "2026-10-31T00:00")
+    assert len(turnos) == 1
+    new_ev = turnos[0]
+    assert engine.db.execute(
+        "SELECT event_id FROM appointments WHERE event_id = ?", (new_ev.id,)
+    ).fetchone() is not None
+    assert engine.db.execute(
+        "SELECT phone FROM vip_alerts WHERE phone = ?", (CLIENT_A,)
+    ).fetchone() is not None
+    assert messenger.last_message(CLIENT_A).kind == "template"
+
+    # 3. Cancel deletes event and removes DB rows
+    await engine.execute_actions([Cancel(phone=CLIENT_A, event_id=new_ev.id)])
+    assert await calendar.get_event("turnos", new_ev.id) is None
+    assert engine.db.execute("SELECT * FROM appointments").fetchone() is None
+    assert engine.db.execute("SELECT * FROM reminders").fetchone() is None
 
 
 @pytest.mark.asyncio

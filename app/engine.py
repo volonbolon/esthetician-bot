@@ -217,19 +217,22 @@ class Engine:
         self.db.execute("DELETE FROM appointments WHERE event_id = ?", (event_id,))
         self.db.execute("DELETE FROM reminders WHERE event_id = ?", (event_id,))
 
-    async def _execute_actions(self, actions: list[Action], now: datetime) -> None:
+    async def execute_actions(
+        self, actions: list[Action], now: datetime | None = None
+    ) -> None:
+        now_dt = now if now is not None else self.clock.now()
         # Execute state/calendar mutations first so CalendarError aborts before any success message
         outbound: list[Action] = []
         for act in actions:
             if isinstance(act, SetName):
-                self._ensure_client_row(act.phone, now)
+                self._ensure_client_row(act.phone, now_dt)
                 self.db.execute(
                     "UPDATE clients SET name = ?, awaiting_name = ? WHERE phone = ?",
                     (act.name, 1 if act.awaiting_name else 0, act.phone),
                 )
                 self.db.commit()
             elif isinstance(act, SetMute):
-                self._ensure_client_row(act.phone, now)
+                self._ensure_client_row(act.phone, now_dt)
                 self.db.execute(
                     "UPDATE clients SET muted_until = ? WHERE phone = ?",
                     (act.muted_until.isoformat() if act.muted_until else None, act.phone),
@@ -245,7 +248,7 @@ class Engine:
                     build_title(act.service, act.client_name),
                     build_description(act.phone),
                 )
-                self._save_appointment_and_reminder(ev.id, act.phone, act.start, now)
+                self._save_appointment_and_reminder(ev.id, act.phone, act.start, now_dt)
                 self.db.commit()
             elif isinstance(act, Reschedule):
                 svc = self.services_cfg.get(act.service)
@@ -259,7 +262,7 @@ class Engine:
                 )
                 await self.calendar.delete_event(self.config.cal_turnos_id, act.old_event_id)
                 self._remove_appointment_and_reminder(act.old_event_id)
-                self._save_appointment_and_reminder(ev.id, act.phone, act.new_start, now)
+                self._save_appointment_and_reminder(ev.id, act.phone, act.new_start, now_dt)
                 self.db.commit()
             elif isinstance(act, Cancel):
                 await self.calendar.delete_event(self.config.cal_turnos_id, act.event_id)
@@ -294,7 +297,7 @@ class Engine:
                 if act.vip_alert_phone:
                     self.db.execute(
                         "INSERT OR REPLACE INTO vip_alerts (phone, last_alert_at) VALUES (?, ?)",
-                        (act.vip_alert_phone, now.isoformat()),
+                        (act.vip_alert_phone, now_dt.isoformat()),
                     )
                     self.db.commit()
                 await self._send_admin_alert(act.text)
@@ -319,7 +322,7 @@ class Engine:
                 esthetician_name=self.config.esthetician_name,
             )
             actions = handle(client_state, incoming, ctx)
-            await self._execute_actions(actions, now)
+            await self.execute_actions(actions, now)
             return True
 
         sender = normalize_phone(incoming.from_phone)
@@ -335,14 +338,14 @@ class Engine:
                         client_state, sender, fetch_calendar=True
                     )
                     actions = handle(client_state, incoming, ctx)
-                    await self._execute_actions(actions, now)
+                    await self.execute_actions(actions, now)
             else:
                 fetch_cal = self._needs_calendar(client_state, incoming)
                 ctx = await self._build_context(
                     client_state, sender, fetch_calendar=fetch_cal
                 )
                 actions = handle(client_state, incoming, ctx)
-                await self._execute_actions(actions, now)
+                await self.execute_actions(actions, now)
         except CalendarError as exc:
             await self._handle_calendar_failure(sender, exc)
 
