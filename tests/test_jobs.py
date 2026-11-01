@@ -110,3 +110,152 @@ async def test_run_sync_and_run_reminders_driven_by_sim_tick(tmp_path: Path):
     assert ev.title == "✅ Limpieza facial – Ana"
     assert isinstance(sim.engine, Engine)
     assert Incoming(wamid="x", from_phone=CLIENT).from_phone == CLIENT
+
+
+@pytest.mark.asyncio
+async def test_reminder_sender_deleted_or_past_event_drops_rows():
+    engine, messenger, calendar, clock = _make_setup()
+
+    ev_del = await calendar.create_event(
+        "turnos", "2026-12-21T10:00", "2026-12-21T11:00", "Limpieza facial – Ana", CLIENT
+    )
+    ev_past = await calendar.create_event(
+        "turnos", "2026-12-21T12:00", "2026-12-21T13:00", "Peeling – Ana", CLIENT
+    )
+    engine._save_appointment_and_reminder(ev_del.id, CLIENT, ev_del.start, clock.now())
+    engine._save_appointment_and_reminder(ev_past.id, CLIENT, ev_past.start, clock.now())
+    engine.db.commit()
+
+    # Delete ev_del in calendar before reminder is due
+    await calendar.delete_event("turnos", ev_del.id)
+
+    # Advance clock past ev_del's send_at (2026-12-19T10:00)
+    clock.set("2026-12-19T10:05:00")
+    assert await jobs.run_reminders(engine) == 0
+    assert messenger.messages_for(CLIENT) == []
+    assert (
+        engine.db.execute(
+            "SELECT * FROM reminders WHERE event_id = ?", (ev_del.id,)
+        ).fetchone()
+        is None
+    )
+    assert (
+        engine.db.execute(
+            "SELECT * FROM appointments WHERE event_id = ?", (ev_del.id,)
+        ).fetchone()
+        is None
+    )
+
+    # Advance clock past ev_past's start time (2026-12-21T12:30) without sending earlier
+    clock.set("2026-12-21T12:30:00")
+    assert await jobs.run_reminders(engine) == 0
+    assert messenger.messages_for(CLIENT) == []
+    assert (
+        engine.db.execute(
+            "SELECT * FROM reminders WHERE event_id = ?", (ev_past.id,)
+        ).fetchone()
+        is None
+    )
+
+
+@pytest.mark.asyncio
+async def test_reminder_sender_moved_event_recomputes_send_at():
+    engine, messenger, calendar, clock = _make_setup()
+
+    # 1. Event moved LATER in Calendar (from 2026-12-21 10:00 to 2026-12-22 15:00)
+    ev = await calendar.create_event(
+        "turnos", "2026-12-21T10:00", "2026-12-21T11:00", "Limpieza facial – Ana", CLIENT
+    )
+    engine._save_appointment_and_reminder(ev.id, CLIENT, ev.start, clock.now())
+    engine.db.commit()
+
+    await calendar.patch_event(
+        "turnos", ev.id, start="2026-12-22T15:00", end="2026-12-22T16:00"
+    )
+
+    # At old send_at (2026-12-19T10:00), run_reminders sees the move, recomputes send_at to 2026-12-20T15:00, and does not send yet
+    clock.set("2026-12-19T10:00:00")
+    assert await jobs.run_reminders(engine) == 0
+    assert messenger.messages_for(CLIENT) == []
+
+    rem = engine.db.execute(
+        "SELECT send_at, sent_at FROM reminders WHERE event_id = ?", (ev.id,)
+    ).fetchone()
+    assert rem is not None
+    assert rem["sent_at"] is None
+    assert rem["send_at"].startswith("2026-12-20T15:00")
+    appt = engine.db.execute(
+        "SELECT start_at FROM appointments WHERE event_id = ?", (ev.id,)
+    ).fetchone()
+    assert appt["start_at"].startswith("2026-12-22T15:00")
+
+    # At new send_at (2026-12-20T15:00), reminder is sent with the updated date/time
+    clock.set("2026-12-20T15:00:00")
+    assert await jobs.run_reminders(engine) == 1
+    msg = messenger.last_message(CLIENT)
+    assert msg is not None
+    assert msg.template_name == "recordatorio_turno"
+    assert msg.template_params == ("Ana", "Limpieza facial", "Mar 22/12 15:00")
+
+    # 2. Event moved EARLIER in Calendar (new_send_at <= now) -> recomputes and sends immediately
+    ev2 = await calendar.create_event(
+        "turnos", "2026-12-24T12:00", "2026-12-24T13:00", "Peeling – Ana", CLIENT
+    )
+    engine._save_appointment_and_reminder(ev2.id, CLIENT, ev2.start, clock.now())
+    engine.db.commit()
+
+    # Move ev2 earlier to 2026-12-23T11:00 (new_send_at = 2026-12-21T11:00)
+    await calendar.patch_event(
+        "turnos", ev2.id, start="2026-12-23T11:00", end="2026-12-23T12:00"
+    )
+    # Run at 2026-12-22T12:00 (when old send_at is due and new_send_at <= now)
+    clock.set("2026-12-22T12:00:00")
+    assert await jobs.run_reminders(engine) == 1
+    msg2 = messenger.last_message(CLIENT)
+    assert msg2 is not None
+    assert msg2.template_params == ("Ana", "Peeling", "Mié 23/12 11:00")
+
+
+@pytest.mark.asyncio
+async def test_reminder_sender_sends_to_muted_client_and_handles_calendar_error():
+    engine, messenger, calendar, clock = _make_setup()
+
+    ev = await calendar.create_event(
+        "turnos", "2026-12-21T10:00", "2026-12-21T11:00", "Limpieza facial – Ana", CLIENT
+    )
+    engine._save_appointment_and_reminder(ev.id, CLIENT, ev.start, clock.now())
+    # Mute client for 12h at reminder time
+    engine._ensure_client_row(CLIENT, clock.now())
+    engine.db.execute(
+        "UPDATE clients SET name = 'Ana', muted_until = ? WHERE phone = ?",
+        ("2026-12-19T22:00:00-03:00", CLIENT),
+    )
+    engine.db.commit()
+
+    clock.set("2026-12-19T10:00:00")
+
+    # 1. If calendar fails on get_event -> admin alerted, sent_at remains NULL
+    calendar.fail_next()
+    assert await jobs.run_reminders(engine) == 0
+    assert messenger.messages_for(CLIENT) == []
+    admin_alert = messenger.last_message(ADMIN)
+    assert admin_alert is not None
+    assert admin_alert.template_name == "alerta_admin"
+    assert (
+        engine.db.execute(
+            "SELECT sent_at FROM reminders WHERE event_id = ?", (ev.id,)
+        ).fetchone()["sent_at"]
+        is None
+    )
+
+    # 2. Next run succeeds even while client is muted, and sets sent_at
+    assert await jobs.run_reminders(engine) == 1
+    msg = messenger.last_message(CLIENT)
+    assert msg is not None
+    assert msg.template_name == "recordatorio_turno"
+    assert msg.template_params == ("Ana", "Limpieza facial", "Lun 21/12 10:00")
+    rem = engine.db.execute(
+        "SELECT sent_at FROM reminders WHERE event_id = ?", (ev.id,)
+    ).fetchone()
+    assert rem["sent_at"] == "2026-12-19T10:00:00-03:00"
+
