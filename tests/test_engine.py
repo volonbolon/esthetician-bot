@@ -244,10 +244,11 @@ async def test_execute_actions_reschedule_cancel_confirm_event_and_vip_alert():
 
 @pytest.mark.asyncio
 async def test_concurrent_confirm_race_allows_only_one_booking():
-    engine, messenger, calendar, _ = _make_engine()
+    engine, messenger, calendar, clock = _make_engine()
+    clock.set("2026-12-18T09:00:00")
     assert engine.booking_lock is BOOKING_LOCK
     await calendar.create_event(
-        "available", "2026-10-29T09:00", "2026-10-29T10:00", "Disponible"
+        "available", "2026-12-21T10:00", "2026-12-21T12:00", "Disponible"
     )
 
     # Onboard both clients
@@ -256,14 +257,20 @@ async def test_concurrent_confirm_race_allows_only_one_booking():
         await engine.handle_incoming(Incoming(wamid=f"init_{idx}b", from_phone=phone, text=name))
 
     orig_list_events = calendar.list_events
+    orig_create_event = calendar.create_event
 
     async def yielding_list_events(cal_id, start, end):
         await asyncio.sleep(0)
         return await orig_list_events(cal_id, start, end)
 
-    calendar.list_events = yielding_list_events  # type: ignore[method-assign]
+    async def yielding_create_event(*args, **kwargs):
+        await asyncio.sleep(0)
+        return await orig_create_event(*args, **kwargs)
 
-    confirm_payload = encode("confirm", svc="Limpieza facial", t="2026-10-29T09:00")
+    calendar.list_events = yielding_list_events  # type: ignore[method-assign]
+    calendar.create_event = yielding_create_event  # type: ignore[method-assign]
+
+    confirm_payload = encode("confirm", svc="Limpieza facial", t="2026-12-21T10:00")
     await asyncio.gather(
         engine.handle_incoming(
             Incoming(
@@ -283,16 +290,30 @@ async def test_concurrent_confirm_race_allows_only_one_booking():
         ),
     )
 
-    turnos = await orig_list_events("turnos", "2026-10-29T00:00", "2026-10-30T00:00")
+    # Exactly one Turnos event, one cached appointment row, one reminder row, and one admin alert
+    turnos = await orig_list_events("turnos", "2026-12-21T00:00", "2026-12-22T00:00")
     assert len(turnos) == 1
+    assert len(engine.db.execute("SELECT * FROM appointments").fetchall()) == 1
+    assert len(engine.db.execute("SELECT * FROM reminders").fetchall()) == 1
+    assert len(messenger.messages_for(ADMIN)) == 1
+
+    # Winner gets confirmation; loser gets "Ese horario ya no está disponible." + fresh 11:00 slot
     texts = [
         m.text
         for p in (CLIENT_A, CLIENT_B)
         for m in messenger.messages_for(p)
         if m.kind == "text"
     ]
-    assert any("Reservamos tu turno" in t for t in texts)
-    assert any("Ese horario ya no está disponible." in t for t in texts)
+    assert sum("Reservamos tu turno" in t for t in texts) == 1
+    assert sum(t == "Ese horario ya no está disponible." for t in texts) == 1
+    loser_lists = [
+        m
+        for p in (CLIENT_A, CLIENT_B)
+        for m in messenger.messages_for(p)
+        if m.kind == "list"
+    ]
+    assert len(loser_lists) == 1
+    assert [r.title for r in loser_lists[0].rows] == ["11:00"]
 
 
 @pytest.mark.asyncio
