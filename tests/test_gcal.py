@@ -1,11 +1,16 @@
+import io
 import os
+from pathlib import Path
 from typing import Any
 
 import pytest
 
 from app.adapters.fake_calendar import FakeCalendar
-from app.adapters.gcal import GoogleCalendar
+from app.adapters.gcal import GoogleCalendar, _parse_gcal_dt
+from app.clock import _to_tz
+from app.config import load_config
 from app.ports import CalendarError, CalendarPort
+from app.sim import Simulator
 
 
 class _FakeReq:
@@ -34,7 +39,19 @@ class _FakeEventsResource:
     def list(self, *, calendarId: str, **kwargs: Any) -> _FakeReq:
         def _do() -> dict[str, Any]:
             self._check()
-            return {"items": list(self.store.get(calendarId, {}).values())}
+            items = list(self.store.get(calendarId, {}).values())
+            time_min = _to_tz(kwargs["timeMin"]) if "timeMin" in kwargs else None
+            time_max = _to_tz(kwargs["timeMax"]) if "timeMax" in kwargs else None
+            filtered: list[dict[str, Any]] = []
+            for it in items:
+                ev_start = _parse_gcal_dt(it["start"])
+                ev_end = _parse_gcal_dt(it["end"])
+                if time_min is not None and ev_end <= time_min:
+                    continue
+                if time_max is not None and ev_start >= time_max:
+                    continue
+                filtered.append(it)
+            return {"items": filtered}
 
         return _FakeReq(_do)
 
@@ -168,3 +185,92 @@ async def test_calendar_contract_suite(backend: str):
         await cal.delete_event(cal_id, created.id)
 
     assert await cal.get_event(cal_id, created.id) is None
+
+
+@pytest.mark.asyncio
+async def test_sim_session_against_google_calendar_backend(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    use_real_gcal = bool(
+        (os.environ.get("RUN_GCAL_CONTRACT") or os.environ.get("GCAL_CONTRACT"))
+        and os.environ.get("GOOGLE_SA_JSON")
+        and os.environ.get("CAL_AVAILABLE_ID")
+        and os.environ.get("CAL_TURNOS_ID")
+    )
+    if use_real_gcal:
+        cfg = load_config({**os.environ, "CALENDAR_BACKEND": "google", "MESSENGER": "console"})
+    else:
+        fake_svc = _FakeGoogleService()
+        monkeypatch.setattr("app.adapters.gcal._build_google_service", lambda _sa: fake_svc)
+        cfg = load_config(
+            {
+                "MESSENGER": "console",
+                "CALENDAR_BACKEND": "google",
+                "GOOGLE_SA_JSON": '{"type":"service_account"}',
+                "CAL_AVAILABLE_ID": "test_avail_cal",
+                "CAL_TURNOS_ID": "test_turnos_cal",
+            }
+        )
+
+    buf = io.StringIO()
+    sim = Simulator(
+        phone="+5491100000001",
+        db_path=tmp_path / "gcal_sim.db",
+        now="2026-12-18T09:00:00",
+        stream=buf,
+        config=cfg,
+    )
+    assert sim.config.calendar_backend == "google"
+    assert isinstance(sim.calendar, GoogleCalendar)
+
+    avail_ev = await sim.calendar.create_event(
+        cfg.cal_available_id,
+        "2026-12-21T09:00",
+        "2026-12-21T12:00",
+        "Disponible",
+    )
+    try:
+        # Onboard & book a slot against GoogleCalendar
+        await sim.handle_line("hola")
+        await sim.handle_line("Sofía")
+        await sim.handle_line("1")  # Reservar
+        await sim.handle_line("1")  # Limpieza facial
+        await sim.handle_line("1")  # Lun 21/12
+        await sim.handle_line("1")  # 09:00
+        await sim.handle_line("1")  # Confirmar
+
+        assert "Reservamos tu turno de Limpieza facial" in buf.getvalue()
+
+        # /cal lists both calendars via GoogleCalendar.list_events
+        await sim.handle_line("/cal")
+        out = buf.getvalue()
+        assert "[cal:available] (1)" in out
+        assert "[cal:turnos] (1)" in out
+        assert "Limpieza facial – Sofía | +5491100000001" in out
+
+        # Advance time to 24h before appointment -> /tick sends reminder -> client confirms (✅)
+        await sim.handle_line("/time 2026-12-20T09:00")
+        await sim.handle_line("/tick")
+        assert "[TEMPLATE recordatorio_turno]" in buf.getvalue()
+        await sim.handle_line("1")  # Confirmar on reminder
+        assert "✅ Limpieza facial – Sofía" in (
+            await sim.calendar.list_events(
+                cfg.cal_turnos_id, "2026-12-21T00:00", "2026-12-22T00:00"
+            )
+        )[0].title
+
+        # Rewind before 24h cutoff and cancel via Mi turno -> deletes event from GoogleCalendar
+        await sim.handle_line("/time 2026-12-19T10:00")
+        await sim.handle_line("menu")
+        await sim.handle_line("2")  # Mi turno
+        await sim.handle_line("2")  # Cancelar
+        assert "fue cancelado." in buf.getvalue()
+        assert (
+            await sim.calendar.list_events(
+                cfg.cal_turnos_id, "2026-12-21T00:00", "2026-12-22T00:00"
+            )
+            == []
+        )
+    finally:
+        await sim.calendar.delete_event(cfg.cal_available_id, avail_ev.id)
+

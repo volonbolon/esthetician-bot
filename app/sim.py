@@ -5,12 +5,13 @@ import io
 import re
 import sys
 from collections.abc import Sequence
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import TextIO
 
 from app.adapters.console_messenger import ConsoleMessenger
 from app.adapters.fake_calendar import DEFAULT_SEED_PATH, FakeCalendar
+from app.adapters.gcal import GoogleCalendar
 from app.clock import FakeClock, _to_tz
 from app.config import Config, load_config
 from app.conversation import Incoming
@@ -18,7 +19,7 @@ from app.db import init_db
 from app.engine import Engine, build_app
 from app.jobs import run_reminders, run_sync
 from app.phones import normalize_phone
-from app.ports import CalendarError
+from app.ports import CalendarError, CalendarPort
 
 DEFAULT_SIM_PHONE = "+5491100000001"
 DEFAULT_ADMIN_PHONE = "+5491100000099"
@@ -38,6 +39,7 @@ class Simulator:
         seed_path: str | Path | None = DEFAULT_SEED_PATH,
         stream: TextIO | None = None,
         config: Config | None = None,
+        calendar: CalendarPort | None = None,
     ) -> None:
         self.db_path = str(db_path)
         self.seed_path = Path(seed_path) if seed_path is not None else None
@@ -49,10 +51,11 @@ class Simulator:
         admin_phones = base_cfg.admin_phones or (DEFAULT_ADMIN_PHONE,)
         self.config = Config(
             messenger="console",
-            calendar_backend="fake",
+            calendar_backend=base_cfg.calendar_backend,
             db_path=self.db_path,
             esthetician_name=base_cfg.esthetician_name,
             admin_phones=tuple(normalize_phone(p) for p in admin_phones),
+            google_sa_json=base_cfg.google_sa_json,
             cal_available_id=base_cfg.cal_available_id,
             cal_turnos_id=base_cfg.cal_turnos_id,
         )
@@ -61,7 +64,12 @@ class Simulator:
 
         self.clock = FakeClock(self._initial_now)
         self.messenger = ConsoleMessenger(stream=self._stream)
-        self.calendar = FakeCalendar(seed_path=self.seed_path)
+        if calendar is not None:
+            self.calendar: CalendarPort = calendar
+        elif self.config.calendar_backend == "google":
+            self.calendar = GoogleCalendar(sa_json=self.config.google_sa_json)
+        else:
+            self.calendar = FakeCalendar(seed_path=self.seed_path)
         self.db = init_db(self.db_path)
         self.engine: Engine = build_app(
             self.config,
@@ -199,7 +207,8 @@ class Simulator:
             return
 
         if cmd == "/calfail":
-            self.calendar.fail_next()
+            if hasattr(self.calendar, "fail_next"):
+                self.calendar.fail_next()
             self._print("[sim] next calendar call will fail")
             return
 
@@ -215,14 +224,20 @@ class Simulator:
 
     async def _handle_cal(self, rest: str) -> None:
         if not rest:
+            now = self.clock.now()
             for cal_label, cal_id in (
                 ("available", self.config.cal_available_id),
                 ("turnos", self.config.cal_turnos_id),
             ):
-                evs = sorted(
-                    self.calendar._calendars.get(cal_id, {}).values(),
-                    key=lambda e: (e.start, e.id),
-                )
+                if isinstance(self.calendar, FakeCalendar):
+                    evs = sorted(
+                        self.calendar._calendars.get(cal_id, {}).values(),
+                        key=lambda e: (e.start, e.id),
+                    )
+                else:
+                    evs = await self.calendar.list_events(
+                        cal_id, now - timedelta(days=1), now + timedelta(days=31)
+                    )
                 self._print(f"[cal:{cal_label}] ({len(evs)})")
                 for ev in evs:
                     desc = f" | {ev.description}" if ev.description else ""
@@ -268,7 +283,7 @@ class Simulator:
                 new_end = move_tokens[4] if len(move_tokens) > 4 else None
             else:
                 ev_id = move_tokens[1]
-                cal_id = self._find_event_cal(ev_id)
+                cal_id = await self._find_event_cal(ev_id)
                 new_start = move_tokens[2]
                 new_end = move_tokens[3] if len(move_tokens) > 3 else None
 
@@ -295,7 +310,7 @@ class Simulator:
             # /cal delete <event_id> OR /cal delete <cal> <event_id>
             if len(tokens) == 2:
                 ev_id = tokens[1]
-                cal_id = self._find_event_cal(ev_id)
+                cal_id = await self._find_event_cal(ev_id)
             else:
                 cal_id = self._resolve_cal_id(tokens[1])
                 ev_id = tokens[2]
@@ -313,9 +328,14 @@ class Simulator:
             return self.config.cal_turnos_id
         return name
 
-    def _find_event_cal(self, event_id: str) -> str:
-        for cal_id, events in self.calendar._calendars.items():
-            if event_id in events:
+    async def _find_event_cal(self, event_id: str) -> str:
+        if isinstance(self.calendar, FakeCalendar):
+            for cal_id, events in self.calendar._calendars.items():
+                if event_id in events:
+                    return cal_id
+            return self.config.cal_turnos_id
+        for cal_id in (self.config.cal_turnos_id, self.config.cal_available_id):
+            if await self.calendar.get_event(cal_id, event_id) is not None:
                 return cal_id
         return self.config.cal_turnos_id
 
@@ -352,11 +372,12 @@ class Simulator:
         ):
             self.db.execute(f"DELETE FROM {table}")
         self.db.commit()
-        self.calendar._calendars.clear()
-        self.calendar._seq = 0
-        self.calendar._fail_count = 0
-        if self.seed_path is not None and self.seed_path.exists():
-            self.calendar.load_seed(self.seed_path)
+        if isinstance(self.calendar, FakeCalendar):
+            self.calendar._calendars.clear()
+            self.calendar._seq = 0
+            self.calendar._fail_count = 0
+            if self.seed_path is not None and self.seed_path.exists():
+                self.calendar.load_seed(self.seed_path)
         self.messenger.sent.clear()
         self.messenger.by_phone.clear()
         self.clock.set(self._initial_now)
